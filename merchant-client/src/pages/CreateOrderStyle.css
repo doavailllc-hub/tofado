@@ -1,0 +1,745 @@
+
+/* ==========================================================================
+   TOFADO MERCHANT — CREATE ORDER STYLE
+   Complete catalog-order UI stylesheet
+   Replaces:
+   - Commerce-Google.css order rules
+   - CatalogOrders-V2.css
+   - CatalogOrders-StatusColors.css
+   ========================================================================== */
+
+.catalog-orders-page {
+  --co-blue: #1a73e8;
+  --co-blue-hover: #1765cc;
+  --co-blue-soft: #e8f0fe;
+  --co-text: #202124;
+  --co-body: #5f6368;
+  --co-muted: #80868b;
+  --co-border: #dadce0;
+  --co-border-soft: #eceff1;
+  --co-soft: #f8f9fa;
+  --co-white: #ffffff;
+
+  --co-success: #188038;
+  --co-success-soft: #e6f4ea;
+  --co-warning: #b06000;
+  --co-warning-soft: #fef7e0;
+  --co-danger: #d93025;
+  --co-danger-soft: #fce8e6;
+  --co-purple: #8e24aa;
+  --co-purple-soft: #f3e8fd;
+  --co-orange: #ef6c00;
+  --co-orange-soft: #fff3e0;
+
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  flex-direction: column;
+  gap: 18px;
+  color: var(--co-body);
+}
+
+/* ==========================================================================
+   PAGE HEADER
+   ========================================================================== */
+
+.catalog-orders-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.catalog-orders-heading > div:first-child {
+  min-width: 0;
+}
+
+.catalog-orders-eyebrow {
+  display: block;
+  color: var(--co-blue);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.catalog-orders-heading h1 {
+  margin: 7px 0 0;
+  color: var(--co-text);
+  font-size: clamp(27px, 3vw, 36px);
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  line-height: 1.15;
+}
+
+.catalog-orders-heading p {
+  max-width: 720px;
+  margin: 8px 0 0;
+  color: var(--co-body);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.catalog-orders-refresh {
+  display: inline-flex;
+  min-height: 40px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 13px;
+  border: 1px solid var(--co-border);
+  border-radius: 7px;
+  color: var(--co-blue);
+  background: var(--co-white);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.catalog-orders-refresh:hover:not(:disabled) {
+  border-color: #a8c7fa;
+  background: #f8fbff;
+}
+
+.catalog-orders-refresh:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.catalog-orders-spin {
+  animation: co-spin 700ms linear infinite;
+}
+
+@keyframes co-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ==========================================================================
+   SUMMARY CARDS
+   ========================================================================== */
+
+.catalog-orders-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.catalog-orders-stats article {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--co-border);
+  border-radius: 10px;
+  background: var(--co-white);
+  box-shadow: none;
+}
+
+.catalog-order-stat-icon {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  grid-row: 1 / span 2;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--co-blue);
+  background: var(--co-blue-soft);
+}
+
+.catalog-order-stat-icon.orange {
+  color: var(--co-orange);
+  background: var(--co-orange-soft);
+}
+
+.catalog-order-stat-icon.green {
+  color: var(--co-success);
+  background: var(--co-success-soft);
+}
+
+.catalog-order-stat-icon.purple {
+  color: var(--co-purple);
+  background: var(--co-purple-soft);
+}
+
+.catalog-orders-stats article > span {
+  color: var(--co-body);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.catalog-orders-stats article > strong {
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--co-text);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ==========================================================================
+   FILTER PANEL
+   ========================================================================== */
+
+.catalog-orders-panel {
+  overflow: hidden;
+  border: 1px solid var(--co-border);
+  border-radius: 12px;
+  background: var(--co-white);
+}
+
+.catalog-orders-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--co-border);
+  background: var(--co-white);
+}
+
+.catalog-orders-search {
+  display: flex;
+  width: min(720px, 100%);
+  min-height: 42px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border: 1px solid var(--co-border);
+  border-radius: 7px;
+  color: var(--co-muted);
+  background: var(--co-soft);
+}
+
+.catalog-orders-search:focus-within {
+  border-color: #a8c7fa;
+  background: var(--co-white);
+  box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.1);
+}
+
+.catalog-orders-search input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  color: var(--co-text);
+  background: transparent;
+}
+
+.catalog-orders-toolbar > select {
+  min-width: 170px;
+  min-height: 42px;
+  padding: 0 34px 0 11px;
+  border: 1px solid var(--co-border);
+  border-radius: 7px;
+  color: var(--co-text);
+  background: var(--co-white);
+  font-size: 11px;
+}
+
+.catalog-orders-alert {
+  margin: 14px 16px 0;
+  padding: 10px 12px;
+  border: 1px solid #f6aea9;
+  border-radius: 7px;
+  color: var(--co-danger);
+  background: var(--co-danger-soft);
+  font-size: 11px;
+}
+
+/* ==========================================================================
+   ORDER LIST
+   ========================================================================== */
+
+.catalog-orders-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+}
+
+.catalog-order-card {
+  --order-accent: #80868b;
+  --order-soft: #f8f9fa;
+  --order-border: #dadce0;
+
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--order-border);
+  border-left: 5px solid var(--order-accent);
+  border-radius: 12px;
+  background:
+    linear-gradient(
+      90deg,
+      var(--order-soft) 0,
+      rgba(255, 255, 255, 0.98) 18%
+    );
+  box-shadow: none;
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    border-color 160ms ease;
+}
+
+.catalog-order-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(60, 64, 67, 0.09);
+}
+
+/* Status themes */
+
+.catalog-order-card.status-pending {
+  --order-accent: #f9ab00;
+  --order-soft: #fff8e1;
+  --order-border: #f4d995;
+}
+
+.catalog-order-card.status-confirmed {
+  --order-accent: #1a73e8;
+  --order-soft: #e8f0fe;
+  --order-border: #a8c7fa;
+}
+
+.catalog-order-card.status-packed {
+  --order-accent: #8e24aa;
+  --order-soft: #f3e8fd;
+  --order-border: #d7b7ea;
+}
+
+.catalog-order-card.status-dispatched {
+  --order-accent: #ef6c00;
+  --order-soft: #fff3e0;
+  --order-border: #f7c58c;
+}
+
+.catalog-order-card.status-delivered {
+  --order-accent: #188038;
+  --order-soft: #e6f4ea;
+  --order-border: #b7dfc1;
+}
+
+.catalog-order-card.status-cancelled {
+  --order-accent: #d93025;
+  --order-soft: #fce8e6;
+  --order-border: #f6aea9;
+}
+
+/* ==========================================================================
+   ORDER HEADER
+   ========================================================================== */
+
+.catalog-order-card-header {
+  display: flex;
+  min-height: 66px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--order-border);
+  background: transparent;
+}
+
+.catalog-order-reference {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.catalog-order-reference-icon {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--order-accent);
+  background: var(--order-soft);
+  box-shadow: inset 0 0 0 1px var(--order-border);
+}
+
+.catalog-order-reference > div:last-child {
+  min-width: 0;
+}
+
+.catalog-order-reference span,
+.catalog-order-reference strong {
+  display: block;
+}
+
+.catalog-order-reference span {
+  color: var(--co-muted);
+  font-size: 9px;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.catalog-order-reference strong {
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--co-text);
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ==========================================================================
+   ORDER INFORMATION
+   ========================================================================== */
+
+.catalog-order-info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.15fr 1.55fr 0.9fr;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--order-border);
+}
+
+.catalog-order-info-grid > div {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+  padding: 14px 16px 14px 0;
+  color: var(--order-accent);
+}
+
+.catalog-order-info-grid > div + div {
+  padding-left: 16px;
+  border-left: 1px solid var(--order-border);
+}
+
+.catalog-order-info-grid > div > span {
+  min-width: 0;
+}
+
+.catalog-order-info-grid small,
+.catalog-order-info-grid strong {
+  display: block;
+}
+
+.catalog-order-info-grid small {
+  color: var(--co-muted);
+  font-size: 9px;
+}
+
+.catalog-order-info-grid strong {
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--co-text);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ==========================================================================
+   ORDER SUMMARY
+   ========================================================================== */
+
+.catalog-order-summary-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 0 16px;
+  border-bottom: 1px solid var(--order-border);
+  background: rgba(255, 255, 255, 0.52);
+}
+
+.catalog-order-summary-row > div {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+  padding: 12px 16px 12px 0;
+  color: var(--order-accent);
+}
+
+.catalog-order-summary-row > div + div {
+  padding-left: 16px;
+  border-left: 1px solid var(--order-border);
+}
+
+.catalog-order-summary-row > div > span {
+  min-width: 0;
+}
+
+.catalog-order-summary-row small,
+.catalog-order-summary-row strong {
+  display: block;
+}
+
+.catalog-order-summary-row small {
+  color: var(--co-muted);
+  font-size: 9px;
+}
+
+.catalog-order-summary-row strong {
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--co-text);
+  font-size: 11px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ==========================================================================
+   ORDER NOTES
+   ========================================================================== */
+
+.catalog-order-notes {
+  margin: 12px 16px 0;
+  padding: 11px 13px;
+  border: 1px solid var(--order-border);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.catalog-order-notes span {
+  color: var(--co-muted);
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.catalog-order-notes p {
+  margin: 5px 0 0;
+  color: var(--co-body);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* ==========================================================================
+   ORDER FOOTER
+   ========================================================================== */
+
+.catalog-order-footer {
+  display: flex;
+  min-height: 60px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 16px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.catalog-order-footer > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--co-muted);
+  font-size: 9px;
+}
+
+.catalog-order-status-control {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.catalog-order-status-control label {
+  color: var(--co-muted);
+  font-size: 9px;
+  font-weight: 600;
+}
+
+.catalog-order-status-control select {
+  min-width: 150px;
+  min-height: 36px;
+  padding: 0 32px 0 10px;
+  border: 1px solid var(--co-border);
+  border-radius: 6px;
+  color: var(--co-text);
+  background: var(--co-white);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+/* Status selector colors */
+
+.catalog-order-status-control select.status-pending {
+  border-color: #f4d995;
+  color: #9a6700;
+  background: #fff8e1;
+}
+
+.catalog-order-status-control select.status-confirmed {
+  border-color: #a8c7fa;
+  color: #174ea6;
+  background: #e8f0fe;
+}
+
+.catalog-order-status-control select.status-packed {
+  border-color: #d7b7ea;
+  color: #681da8;
+  background: #f3e8fd;
+}
+
+.catalog-order-status-control select.status-dispatched {
+  border-color: #f7c58c;
+  color: #b06000;
+  background: #fff3e0;
+}
+
+.catalog-order-status-control select.status-delivered {
+  border-color: #b7dfc1;
+  color: #137333;
+  background: #e6f4ea;
+}
+
+.catalog-order-status-control select.status-cancelled {
+  border-color: #f6aea9;
+  color: #b3261e;
+  background: #fce8e6;
+}
+
+/* ==========================================================================
+   BADGES
+   ========================================================================== */
+
+.catalog-order-card .badge {
+  position: relative;
+  z-index: 2;
+  min-height: 24px;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+/* ==========================================================================
+   EMPTY STATE
+   ========================================================================== */
+
+.catalog-orders-empty {
+  display: grid;
+  min-height: 260px;
+  place-items: center;
+  align-content: center;
+  padding: 28px;
+  text-align: center;
+}
+
+.catalog-orders-empty > p {
+  margin: -40px 0 0;
+  color: var(--co-muted);
+  font-size: 11px;
+}
+
+/* ==========================================================================
+   RESPONSIVE
+   ========================================================================== */
+
+@media (max-width: 1080px) {
+  .catalog-orders-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .catalog-order-info-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .catalog-order-info-grid > div:nth-child(3) {
+    padding-left: 0;
+    border-top: 1px solid var(--order-border);
+    border-left: 0;
+  }
+
+  .catalog-order-info-grid > div:nth-child(4) {
+    border-top: 1px solid var(--order-border);
+  }
+}
+
+@media (max-width: 760px) {
+  .catalog-orders-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .catalog-orders-refresh {
+    width: 100%;
+  }
+
+  .catalog-orders-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .catalog-orders-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .catalog-orders-search,
+  .catalog-orders-toolbar > select {
+    width: 100%;
+  }
+
+  .catalog-order-card-header {
+    align-items: flex-start;
+  }
+
+  .catalog-order-info-grid,
+  .catalog-order-summary-row {
+    grid-template-columns: 1fr;
+  }
+
+  .catalog-order-info-grid > div,
+  .catalog-order-info-grid > div + div,
+  .catalog-order-summary-row > div,
+  .catalog-order-summary-row > div + div {
+    padding: 11px 0;
+    border-top: 1px solid var(--order-border);
+    border-left: 0;
+  }
+
+  .catalog-order-info-grid > div:first-child,
+  .catalog-order-summary-row > div:first-child {
+    border-top: 0;
+  }
+
+  .catalog-order-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .catalog-order-status-control {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .catalog-order-status-control select {
+    width: 100%;
+  }
+}
+
+@media (max-width: 520px) {
+  .catalog-orders-list {
+    padding: 10px;
+  }
+
+  .catalog-order-card {
+    border-radius: 10px;
+  }
+
+  .catalog-order-card-header,
+  .catalog-order-info-grid,
+  .catalog-order-summary-row,
+  .catalog-order-footer {
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+
+  .catalog-order-reference strong {
+    max-width: 210px;
+  }
+
+  .catalog-orders-heading h1 {
+    font-size: 29px;
+  }
+}

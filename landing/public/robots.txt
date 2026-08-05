@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://tofado.com/sitemap.xml
