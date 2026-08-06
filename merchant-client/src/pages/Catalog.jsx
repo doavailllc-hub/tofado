@@ -217,14 +217,15 @@ export default function Catalog() {
     };
   }, [editorOpen, savingProduct, uploadingImage]);
 
-  const publicUrl = useMemo(() => {
-    if (catalog?.public_url) return catalog.public_url;
-    if (catalog?.slug) {
-      return `${window.location.origin}/catalog/${catalog.slug}`;
-    }
-    return "";
-  }, [catalog]);
+const publicUrl = useMemo(() => {
+  if (!catalog?.slug) return "";
 
+  const baseUrl =
+    import.meta.env.VITE_PUBLIC_CATALOG_URL ||
+    window.location.origin;
+
+  return `${baseUrl.replace(/\/+$/, "")}/catalog/${catalog.slug}`;
+}, [catalog?.slug]);
   const categories = useMemo(() => {
     const values = new Set(PRODUCT_CATEGORIES);
 
