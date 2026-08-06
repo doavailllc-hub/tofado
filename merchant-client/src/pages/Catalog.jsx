@@ -79,6 +79,7 @@ const EMPTY_PRODUCT = {
   unit: "piece",
   pack_size: "",
   minimum_order: 1,
+  price_mode: "fixed",
   price: "",
   compare_price: "",
   stock_quantity: "",
@@ -90,7 +91,8 @@ function normalizeProduct(product = {}) {
   return {
     ...EMPTY_PRODUCT,
     ...product,
-    id: product.id || null,
+    id: product.id ?? product.product_id ?? null,
+    price_mode: product.price_mode === "quote" ? "quote" : "fixed",
     price: product.price ?? "",
     compare_price: product.compare_price ?? "",
     stock_quantity: product.stock_quantity ?? "",
@@ -455,9 +457,18 @@ const publicUrl = useMemo(() => {
   };
 
   const openEdit = (product) => {
+    const normalized = normalizeProduct(product);
+
+    if (!normalized.id) {
+      setError(
+        "Unable to edit this product because its ID is missing. Refresh the catalog and try again."
+      );
+      return;
+    }
+
     setError("");
     setEditorStep(1);
-    setProductForm(normalizeProduct(product));
+    setProductForm(normalized);
     setEditorOpen(true);
   };
 
@@ -547,8 +558,8 @@ const publicUrl = useMemo(() => {
       }
 
       if (
-        productForm.price === "" ||
-        Number(productForm.price) < 0
+        productForm.price_mode === "fixed" &&
+        (productForm.price === "" || Number(productForm.price) < 0)
       ) {
         setError("Enter a valid product price.");
         return false;
@@ -609,8 +620,11 @@ const publicUrl = useMemo(() => {
       return;
     }
 
-    if (Number(productForm.price) < 0) {
-      setError("Price cannot be negative.");
+    if (
+      productForm.price_mode === "fixed" &&
+      (productForm.price === "" || Number(productForm.price) < 0)
+    ) {
+      setError("Enter a valid product price.");
       return;
     }
 
@@ -634,7 +648,11 @@ const publicUrl = useMemo(() => {
         unit: productForm.unit,
         pack_size: productForm.pack_size.trim() || null,
         minimum_order: Number(productForm.minimum_order || 1),
-        price: Number(productForm.price || 0),
+        price_mode: productForm.price_mode,
+        price:
+          productForm.price_mode === "quote"
+            ? null
+            : Number(productForm.price || 0),
         compare_price:
           productForm.compare_price === ""
             ? null
@@ -653,9 +671,15 @@ const publicUrl = useMemo(() => {
           payload
         );
 
+        const updatedProduct = normalizeProduct(
+          response.data?.product || response.data
+        );
+
         setProducts((current) =>
           current.map((item) =>
-            item.id === productForm.id ? response.data : item
+            Number(item.id) === Number(productForm.id)
+              ? updatedProduct
+              : item
           )
         );
       } else {
@@ -664,7 +688,11 @@ const publicUrl = useMemo(() => {
           payload
         );
 
-        setProducts((current) => [response.data, ...current]);
+        const createdProduct = normalizeProduct(
+          response.data?.product || response.data
+        );
+
+        setProducts((current) => [createdProduct, ...current]);
       }
 
       setEditorOpen(false);
@@ -1125,11 +1153,23 @@ const publicUrl = useMemo(() => {
                         "General wholesale product"}
                     </p>
 
-                    <div className="merchant-product-price">
+                    <div
+                      className={`merchant-product-price ${
+                        product.price_mode === "quote"
+                          ? "quote-price"
+                          : ""
+                      }`}
+                    >
                       <strong>
-                        SAR {formatMoney(product.price)}
+                        {product.price_mode === "quote"
+                          ? "Price on request"
+                          : `SAR ${formatMoney(product.price)}`}
                       </strong>
-                      <small>per {product.unit || "piece"}</small>
+                      <small>
+                        {product.price_mode === "quote"
+                          ? "Contact merchant for quotation"
+                          : `per ${product.unit || "piece"}`}
+                      </small>
                     </div>
 
                     <div className="merchant-product-details">
@@ -1686,22 +1726,52 @@ const publicUrl = useMemo(() => {
                         </label>
 
                         <label>
-                          <span>Wholesale price (SAR) *</span>
-                          <input
-                            required
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={productForm.price}
-                            placeholder="0.00"
+                          <span>Price display</span>
+
+                          <select
+                            value={productForm.price_mode}
                             onChange={(event) =>
                               updateProductField(
-                                "price",
+                                "price_mode",
                                 event.target.value
                               )
                             }
-                          />
+                          >
+                            <option value="fixed">
+                              Show product price
+                            </option>
+
+                            <option value="quote">
+                              Price on request
+                            </option>
+                          </select>
+
+                          <small>
+                            Select Price on request when the
+                            public selling price is private.
+                          </small>
                         </label>
+
+                        {productForm.price_mode === "fixed" && (
+                          <label>
+                            <span>Wholesale price (SAR) *</span>
+
+                            <input
+                              required
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={productForm.price}
+                              placeholder="0.00"
+                              onChange={(event) =>
+                                updateProductField(
+                                  "price",
+                                  event.target.value
+                                )
+                              }
+                            />
+                          </label>
+                        )}
 
                         <label>
                           <span>Compare price</span>
@@ -1904,7 +1974,11 @@ const publicUrl = useMemo(() => {
                             <div>
                               <dt>Selling price</dt>
                               <dd>
-                                SAR {formatMoney(productForm.price)}
+                                {productForm.price_mode === "quote"
+                                  ? "Price on request"
+                                  : `SAR ${formatMoney(
+                                      productForm.price
+                                    )}`}
                               </dd>
                             </div>
                             <div>

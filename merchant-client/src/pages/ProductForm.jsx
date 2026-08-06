@@ -23,6 +23,7 @@ const initialForm = {
   category_name: "",
   description: "",
   image_url: "",
+  image_key: "",
   unit: "piece",
   pack_size: "",
   minimum_order: 1,
@@ -76,6 +77,11 @@ export default function ProductForm() {
           setForm({
             ...initialForm,
             ...response.data,
+            price_mode:
+              response.data?.price_mode === "quote"
+                ? "quote"
+                : "fixed",
+            price: response.data?.price ?? "",
             is_active: Boolean(response.data?.is_active),
           });
         }
@@ -157,6 +163,7 @@ export default function ProductForm() {
         description:
           form.description.trim() || null,
         image_url: form.image_url.trim() || null,
+        image_key: form.image_key?.trim() || null,
         unit: form.unit,
         pack_size: form.pack_size.trim() || null,
         minimum_order: Number(
