@@ -180,10 +180,9 @@ export default function Catalog() {
 
   if (!catalog?.slug) return "";
 
-  const base =
-    import.meta.env.VITE_PUBLIC_CATALOG_URL ||
-    "https://tofado.com";
-
+const baseUrl =
+  import.meta.env.VITE_PUBLIC_CATALOG_URL ||
+  "https://merchant.tofado.com";
   return `${base}/catalog/${catalog.slug}`;
 }, [catalog]);
 
