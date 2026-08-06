@@ -175,17 +175,15 @@ export default function Catalog() {
     };
   }, [editorOpen, savingProduct, uploadingImage]);
 
- const publicUrl = useMemo(() => {
-  if (catalog?.public_url) return catalog.public_url;
-
+const publicUrl = useMemo(() => {
   if (!catalog?.slug) return "";
 
-const baseUrl =
-  import.meta.env.VITE_PUBLIC_CATALOG_URL ||
-  "https://merchant.tofado.com";
-  return `${base}/catalog/${catalog.slug}`;
-}, [catalog]);
+  const baseUrl =
+    import.meta.env.VITE_PUBLIC_CATALOG_URL ||
+    "https://merchant.tofado.com";
 
+  return `${baseUrl}/catalog/${catalog.slug}`;
+}, [catalog]);
   const categories = useMemo(() => {
     const values = new Set(PRODUCT_CATEGORIES);
 
