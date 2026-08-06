@@ -408,8 +408,6 @@ app.get('/api/retailer/invoices', auth, allow('retailer'), async (req, res) => r
 app.get('/api/retailer/dashboard', auth, allow('retailer'), async (req, res) => { const [s] = await q(`SELECT COUNT(*) total_orders,SUM(status='pending') pending_orders,COALESCE(SUM(total_amount),0) purchase_value FROM purchase_orders WHERE retailer_id=?`, [req.user.id]); const [inv] = await q(`SELECT COALESCE(SUM(total_amount-paid_amount),0) outstanding FROM invoices WHERE retailer_id=?`, [req.user.id]); const recent = await q(`SELECT o.id,o.order_no,w.business_name,o.created_at,o.status,o.total_amount FROM purchase_orders o JOIN users w ON w.id=o.wholesaler_id WHERE o.retailer_id=? ORDER BY o.id DESC LIMIT 8`, [req.user.id]); res.json({ stats: { total_orders: s.total_orders, pending_orders: s.pending_orders, purchase_value: `SAR ${Number(s.purchase_value).toFixed(2)}`, outstanding: `SAR ${Number(inv.outstanding).toFixed(2)}` }, recent }) });
 app.get('/api/wholesaler/orders', auth, allow('wholesaler'), async (req, res) => res.json(await q(`SELECT o.id,o.order_no,r.business_name retailer_name,o.created_at,o.required_date,o.status,o.total_amount FROM purchase_orders o JOIN users r ON r.id=o.retailer_id WHERE o.wholesaler_id=? ORDER BY o.id DESC`, [req.user.id])));
 app.patch('/api/wholesaler/orders/:id/status', auth, allow('wholesaler'), async (req, res) => { const allowed = ['pending', 'confirmed', 'packed', 'dispatched', 'delivered', 'cancelled']; if (!allowed.includes(req.body.status)) return res.status(400).json({ message: 'Invalid status' }); await q('UPDATE purchase_orders SET status=?, delivered_at=IF(?="delivered",NOW(),delivered_at) WHERE id=? AND wholesaler_id=?', [req.body.status, req.body.status, req.params.id, req.user.id]); res.json({ message: 'Updated' }) });
-app.get('/api/wholesaler/retailers', auth, allow('wholesaler'), async (req, res) => res.json(await q(`SELECT r.id,r.business_name,r.name,r.phone,r.location,COUNT(DISTINCT o.id) orders_count,COALESCE(SUM(i.total_amount-i.paid_amount),0) outstanding FROM users r JOIN purchase_orders o ON o.retailer_id=r.id LEFT JOIN invoices i ON i.retailer_id=r.id AND i.wholesaler_id=? WHERE o.wholesaler_id=? GROUP BY r.id ORDER BY r.business_name`, [req.user.id, req.user.id])));
-app.get('/api/wholesaler/deliveries', auth, allow('wholesaler'), async (req, res) => res.json(await q(`SELECT o.id,o.order_no,r.business_name retailer_name,o.delivery_address,o.status,o.delivered_at FROM purchase_orders o JOIN users r ON r.id=o.retailer_id WHERE o.wholesaler_id=? AND o.status IN ('packed','dispatched','delivered') ORDER BY o.id DESC`, [req.user.id])));
 app.get('/api/wholesaler/invoices', auth, allow('wholesaler'), async (req, res) => res.json(await q(`SELECT i.id,i.invoice_no,r.business_name retailer_name,o.order_no,i.total_amount,i.paid_amount,i.due_date,i.status FROM invoices i JOIN users r ON r.id=i.retailer_id JOIN purchase_orders o ON o.id=i.order_id WHERE i.wholesaler_id=? ORDER BY i.id DESC`, [req.user.id])));
 app.get('/api/wholesaler/payments', auth, allow('wholesaler'), async (req, res) => res.json(await q(`SELECT p.id,p.payment_no,r.business_name retailer_name,i.invoice_no,p.amount,p.method,p.paid_at,p.status FROM payments p JOIN invoices i ON i.id=p.invoice_id JOIN users r ON r.id=p.retailer_id WHERE p.wholesaler_id=? ORDER BY p.id DESC`, [req.user.id])));
 app.get('/api/wholesaler/dashboard', auth, allow('wholesaler'), async (req, res) => { const [s] = await q(`SELECT COUNT(*) total_orders,SUM(status='pending') pending_orders,SUM(status='delivered') delivered_orders,COUNT(DISTINCT retailer_id) retailers FROM purchase_orders WHERE wholesaler_id=?`, [req.user.id]); const [i] = await q(`SELECT COALESCE(SUM(total_amount-paid_amount),0) outstanding FROM invoices WHERE wholesaler_id=?`, [req.user.id]); const recent = await q(`SELECT o.id,o.order_no,r.business_name,o.created_at,o.status,o.total_amount FROM purchase_orders o JOIN users r ON r.id=o.retailer_id WHERE o.wholesaler_id=? ORDER BY o.id DESC LIMIT 8`, [req.user.id]); res.json({ stats: { total_orders: s.total_orders, pending_orders: s.pending_orders, delivered_orders: s.delivered_orders, retailers: s.retailers, outstanding: `SAR ${Number(i.outstanding).toFixed(2)}` }, recent }) });
@@ -1906,4 +1904,1661 @@ app.post(
     }
   }
 );
+// ======================================================
+// WHOLESALER: GET PUBLIC CATALOG ENQUIRIES
+// GET /api/wholesaler/catalog/enquiries
+// ======================================================
+
+app.get(
+  "/api/wholesaler/catalog/enquiries",
+  auth,
+  allow("wholesaler"),
+  async (req, res, next) => {
+    try {
+      const enquiries = await q(
+        `SELECT
+          e.id,
+          e.wholesaler_id,
+          e.product_id,
+          e.customer_name,
+          e.business_name,
+          e.phone,
+          e.email,
+          e.message,
+          e.quantity,
+          e.status,
+          e.created_at,
+          e.updated_at,
+
+          p.name AS product_name,
+          p.sku AS product_sku,
+          p.image_url AS product_image
+
+        FROM wholesale_catalog_enquiries e
+
+        LEFT JOIN wholesale_products p
+          ON p.id = e.product_id
+
+        WHERE e.wholesaler_id = ?
+
+        ORDER BY e.created_at DESC`,
+        [req.user.id]
+      );
+
+      return res.json({
+        enquiries,
+        total: enquiries.length,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+// ======================================================
+// WHOLESALER: CREATE RETAILER MANUALLY
+// POST /api/wholesaler/retailers
+// ======================================================
+// ======================================================
+// WHOLESALER RETAILERS
+// ======================================================
+
+// ------------------------------------------------------
+// GET CONNECTED RETAILERS
+// GET /api/wholesaler/retailers
+// ------------------------------------------------------
+
+app.get(
+  "/api/wholesaler/retailers",
+  auth,
+  allow("wholesaler"),
+  async (req, res, next) => {
+    try {
+      const wholesalersId = Number(req.user.id);
+
+      if (!wholesalersId) {
+        return res.status(401).json({
+          message: "Invalid wholesaler account.",
+        });
+      }
+
+      const retailers = await q(
+        `
+        SELECT
+          u.id,
+          u.business_name,
+          u.name,
+          u.email,
+          u.phone,
+          u.location,
+          u.address,
+          u.tax_number,
+          u.status,
+
+          wr.id AS connection_id,
+          wr.source,
+          wr.credit_limit,
+          wr.payment_terms,
+          wr.notes,
+          wr.status AS connection_status,
+          wr.created_at AS connected_at,
+
+          COUNT(DISTINCT po.id) AS orders_count,
+
+          COALESCE(
+            SUM(
+              CASE
+                WHEN i.status NOT IN ('paid', 'cancelled')
+                THEN GREATEST(
+                  COALESCE(i.total_amount, 0) -
+                  COALESCE(i.paid_amount, 0),
+                  0
+                )
+                ELSE 0
+              END
+            ),
+            0
+          ) AS outstanding
+
+        FROM wholesaler_retailers wr
+
+        INNER JOIN users u
+          ON u.id = wr.retailer_id
+          AND u.role = 'retailer'
+
+        LEFT JOIN purchase_orders po
+          ON po.retailer_id = u.id
+          AND po.wholesaler_id = wr.wholesaler_id
+
+        LEFT JOIN invoices i
+          ON i.retailer_id = u.id
+          AND i.wholesaler_id = wr.wholesaler_id
+
+        WHERE wr.wholesaler_id = ?
+          AND wr.status = 'active'
+
+        GROUP BY
+          u.id,
+          u.business_name,
+          u.name,
+          u.email,
+          u.phone,
+          u.location,
+          u.address,
+          u.tax_number,
+          u.status,
+
+          wr.id,
+          wr.source,
+          wr.credit_limit,
+          wr.payment_terms,
+          wr.notes,
+          wr.status,
+          wr.created_at
+
+        ORDER BY wr.created_at DESC, u.business_name ASC
+        `,
+        [wholesalersId]
+      );
+
+      return res.json(retailers);
+    } catch (error) {
+      console.error(
+        "LOAD WHOLESALER RETAILERS ERROR:",
+        error
+      );
+
+      next(error);
+    }
+  }
+);
+
+// ------------------------------------------------------
+// CREATE OR CONNECT RETAILER MANUALLY
+// POST /api/wholesaler/retailers
+// ------------------------------------------------------
+
+app.post(
+  "/api/wholesaler/retailers",
+  auth,
+  allow("wholesaler"),
+  async (req, res, next) => {
+    let connection;
+
+    try {
+      const wholesalerId = Number(req.user.id);
+
+      const {
+        business_name,
+        name,
+        email,
+        phone,
+        location,
+        address,
+        vat_number,
+        tax_number,
+        credit_limit = 0,
+        payment_terms = "cash",
+        notes,
+      } = req.body || {};
+
+      const cleanBusinessName = String(
+        business_name || ""
+      ).trim();
+
+      const cleanName = String(name || "").trim();
+
+      const cleanEmail = String(email || "")
+        .trim()
+        .toLowerCase();
+
+      const cleanPhone = String(phone || "").trim();
+
+      const cleanLocation = String(
+        location || ""
+      ).trim();
+
+      const cleanAddress = String(address || "").trim();
+
+      const cleanTaxNumber = String(
+        tax_number || vat_number || ""
+      ).trim();
+
+      const cleanNotes = String(notes || "").trim();
+
+      const cleanPaymentTerms = String(
+        payment_terms || "cash"
+      ).trim();
+
+      const cleanCreditLimit = Number(credit_limit) || 0;
+
+      if (!wholesalerId) {
+        return res.status(401).json({
+          message: "Invalid wholesaler account.",
+        });
+      }
+
+      if (!cleanBusinessName) {
+        return res.status(400).json({
+          message: "Business name is required.",
+        });
+      }
+
+      if (!cleanName) {
+        return res.status(400).json({
+          message: "Contact person is required.",
+        });
+      }
+
+      if (!cleanPhone) {
+        return res.status(400).json({
+          message: "Phone number is required.",
+        });
+      }
+
+      if (!cleanLocation) {
+        return res.status(400).json({
+          message: "City or location is required.",
+        });
+      }
+
+      connection = await pool.getConnection();
+      await connection.beginTransaction();
+
+      let retailerId;
+      let temporaryPassword = null;
+      let retailerWasCreated = false;
+
+      const [existingRetailers] = await connection.query(
+        `
+        SELECT
+          id,
+          business_name,
+          name,
+          email,
+          phone,
+          location,
+          address,
+          tax_number,
+          status
+
+        FROM users
+
+        WHERE role = 'retailer'
+          AND (
+            phone = ?
+            OR (
+              ? <> ''
+              AND email = ?
+            )
+          )
+
+        LIMIT 1
+        `,
+        [
+          cleanPhone,
+          cleanEmail,
+          cleanEmail,
+        ]
+      );
+
+      const existingRetailer = existingRetailers[0];
+
+      if (existingRetailer) {
+        retailerId = existingRetailer.id;
+
+        const [existingConnections] =
+          await connection.query(
+            `
+            SELECT id
+            FROM wholesaler_retailers
+            WHERE wholesaler_id = ?
+              AND retailer_id = ?
+            LIMIT 1
+            `,
+            [wholesalerId, retailerId]
+          );
+
+        if (existingConnections.length) {
+          await connection.rollback();
+
+          return res.status(409).json({
+            message:
+              "This retailer is already connected to your business.",
+          });
+        }
+
+        await connection.query(
+          `
+          UPDATE users
+          SET
+            business_name = ?,
+            name = ?,
+            email = ?,
+            phone = ?,
+            location = ?,
+            address = ?,
+            tax_number = ?,
+            status = 'active',
+            updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+            AND role = 'retailer'
+          `,
+          [
+            cleanBusinessName,
+            cleanName,
+            cleanEmail || existingRetailer.email,
+            cleanPhone,
+            cleanLocation,
+            cleanAddress || existingRetailer.address,
+            cleanTaxNumber || existingRetailer.tax_number,
+            retailerId,
+          ]
+        );
+      } else {
+        temporaryPassword = crypto
+          .randomBytes(6)
+          .toString("hex");
+
+        const passwordHash =
+          hashPassword(temporaryPassword);
+
+        const [userResult] = await connection.query(
+          `
+          INSERT INTO users (
+            role,
+            name,
+            business_name,
+            email,
+            phone,
+            location,
+            address,
+            tax_number,
+            password_hash,
+            status,
+            created_at,
+            updated_at
+          )
+          VALUES (
+            'retailer',
+            ?,
+            ?,
+            ?,
+            ?,
+            ?,
+            ?,
+            ?,
+            ?,
+            'active',
+            CURRENT_TIMESTAMP,
+            CURRENT_TIMESTAMP
+          )
+          `,
+          [
+            cleanName,
+            cleanBusinessName,
+            cleanEmail || null,
+            cleanPhone,
+            cleanLocation,
+            cleanAddress || null,
+            cleanTaxNumber || null,
+            passwordHash,
+          ]
+        );
+
+        retailerId = userResult.insertId;
+        retailerWasCreated = true;
+      }
+
+      const [connectionResult] =
+        await connection.query(
+          `
+          INSERT INTO wholesaler_retailers (
+            wholesaler_id,
+            retailer_id,
+            source,
+            credit_limit,
+            payment_terms,
+            notes,
+            status,
+            created_at
+          )
+          VALUES (
+            ?,
+            ?,
+            'manual',
+            ?,
+            ?,
+            ?,
+            'active',
+            CURRENT_TIMESTAMP
+          )
+          `,
+          [
+            wholesalerId,
+            retailerId,
+            cleanCreditLimit,
+            cleanPaymentTerms,
+            cleanNotes || null,
+          ]
+        );
+
+      await connection.commit();
+
+      return res.status(201).json({
+        message: retailerWasCreated
+          ? "Retailer created and connected successfully."
+          : "Existing retailer connected successfully.",
+
+        retailer: {
+          id: retailerId,
+          connection_id: connectionResult.insertId,
+          business_name: cleanBusinessName,
+          name: cleanName,
+          email: cleanEmail || null,
+          phone: cleanPhone,
+          location: cleanLocation,
+          address: cleanAddress || null,
+          tax_number: cleanTaxNumber || null,
+          credit_limit: cleanCreditLimit,
+          payment_terms: cleanPaymentTerms,
+          notes: cleanNotes || null,
+          source: "manual",
+          status: "active",
+        },
+
+        temporary_password: temporaryPassword,
+      });
+    } catch (error) {
+      if (connection) {
+        try {
+          await connection.rollback();
+        } catch (rollbackError) {
+          console.error(
+            "CREATE RETAILER ROLLBACK ERROR:",
+            rollbackError
+          );
+        }
+      }
+
+      if (error?.code === "ER_DUP_ENTRY") {
+        return res.status(409).json({
+          message:
+            "This retailer or connection already exists.",
+        });
+      }
+
+      console.error(
+        "CREATE WHOLESALER RETAILER ERROR:",
+        error
+      );
+
+      next(error);
+    } finally {
+      if (connection) {
+        connection.release();
+      }
+    }
+  }
+);
+// ======================================================
+// GET ONE CONNECTED RETAILER
+// GET /api/wholesaler/retailers/:id
+// ======================================================
+
+app.get(
+  "/api/wholesaler/retailers/:id",
+  auth,
+  allow("wholesaler"),
+  async (req, res, next) => {
+    try {
+      const wholesalerId = Number(req.user.id);
+      const retailerId = Number(req.params.id);
+
+      if (!retailerId) {
+        return res.status(400).json({
+          message: "Invalid retailer ID.",
+        });
+      }
+
+      const retailers = await q(
+        `
+        SELECT
+          u.id,
+          u.business_name,
+          u.name,
+          u.email,
+          u.phone,
+          u.location,
+          u.address,
+          u.tax_number,
+          u.status,
+
+          wr.id AS connection_id,
+          wr.source,
+          wr.credit_limit,
+          wr.payment_terms,
+          wr.notes,
+          wr.status AS connection_status,
+          wr.created_at AS connected_at,
+
+          COUNT(DISTINCT po.id) AS orders_count,
+
+          COALESCE(
+            SUM(DISTINCT COALESCE(po.total_amount, 0)),
+            0
+          ) AS order_value,
+
+          0 AS outstanding,
+          0 AS paid_amount,
+
+          MAX(po.created_at) AS last_order_at
+
+        FROM wholesaler_retailers wr
+
+        INNER JOIN users u
+          ON u.id = wr.retailer_id
+          AND u.role = 'retailer'
+
+        LEFT JOIN purchase_orders po
+          ON po.retailer_id = u.id
+          AND po.wholesaler_id = wr.wholesaler_id
+
+        WHERE wr.wholesaler_id = ?
+          AND wr.retailer_id = ?
+          AND wr.status = 'active'
+
+        GROUP BY
+          u.id,
+          u.business_name,
+          u.name,
+          u.email,
+          u.phone,
+          u.location,
+          u.address,
+          u.tax_number,
+          u.status,
+
+          wr.id,
+          wr.source,
+          wr.credit_limit,
+          wr.payment_terms,
+          wr.notes,
+          wr.status,
+          wr.created_at
+
+        LIMIT 1
+        `,
+        [wholesalerId, retailerId]
+      );
+
+      if (!retailers.length) {
+        return res.status(404).json({
+          message:
+            "Retailer not found or not connected to your business.",
+        });
+      }
+
+      return res.json({
+        retailer: retailers[0],
+      });
+    } catch (error) {
+      console.error(
+        "LOAD RETAILER DETAILS ERROR:",
+        error
+      );
+
+      next(error);
+    }
+  }
+);
+// ======================================================
+// RETAILER ORDERS
+// GET /api/wholesaler/retailers/:id/orders
+// ======================================================
+
+app.get(
+  "/api/wholesaler/retailers/:id/orders",
+  auth,
+  allow("wholesaler"),
+  async (req, res, next) => {
+    try {
+      const wholesalerId = Number(req.user.id);
+      const retailerId = Number(req.params.id);
+
+      if (!retailerId) {
+        return res.status(400).json({
+          message: "Invalid retailer ID.",
+        });
+      }
+
+      const orders = await q(
+        `
+        SELECT
+          po.id,
+          po.order_no,
+          po.retailer_id,
+          po.wholesaler_id,
+          po.delivery_address,
+          po.required_date,
+          po.notes,
+          po.status,
+          po.subtotal,
+          po.tax_amount,
+          po.total_amount,
+          po.delivered_at,
+          po.created_at,
+          po.updated_at,
+
+          COUNT(DISTINCT poi.id) AS items_count
+
+        FROM purchase_orders po
+
+        LEFT JOIN purchase_order_items poi
+          ON poi.order_id = po.id
+
+        WHERE po.wholesaler_id = ?
+          AND po.retailer_id = ?
+
+        GROUP BY
+          po.id,
+          po.order_no,
+          po.retailer_id,
+          po.wholesaler_id,
+          po.delivery_address,
+          po.required_date,
+          po.notes,
+          po.status,
+          po.subtotal,
+          po.tax_amount,
+          po.total_amount,
+          po.delivered_at,
+          po.created_at,
+          po.updated_at
+
+        ORDER BY po.created_at DESC
+        `,
+        [wholesalerId, retailerId]
+      );
+
+      return res.json({
+        orders,
+      });
+    } catch (error) {
+      console.error(
+        "LOAD RETAILER ORDERS ERROR:",
+        error
+      );
+
+      next(error);
+    }
+  }
+);
+
+// ======================================================
+// RETAILER INVOICES
+// GET /api/wholesaler/retailers/:id/invoices
+// ======================================================
+
+app.get(
+  "/api/wholesaler/retailers/:id/invoices",
+  auth,
+  allow("wholesaler"),
+  async (req, res, next) => {
+    try {
+      const wholesalerId = Number(req.user.id);
+      const retailerId = Number(req.params.id);
+
+      if (!retailerId) {
+        return res.status(400).json({
+          message: "Invalid retailer ID.",
+        });
+      }
+
+      const invoices = await q(
+        `
+        SELECT
+          i.id,
+          i.invoice_no,
+          i.order_id,
+          i.retailer_id,
+          i.wholesaler_id,
+          i.subtotal,
+          i.tax_amount,
+          i.total_amount,
+          i.paid_amount,
+          i.due_date,
+          i.status,
+          i.created_at,
+
+          po.order_no
+
+        FROM invoices i
+
+        LEFT JOIN purchase_orders po
+          ON po.id = i.order_id
+
+        WHERE i.wholesaler_id = ?
+          AND i.retailer_id = ?
+
+        ORDER BY i.created_at DESC
+        `,
+        [wholesalerId, retailerId]
+      );
+
+      return res.json({
+        invoices,
+      });
+    } catch (error) {
+      console.error(
+        "LOAD RETAILER INVOICES ERROR:",
+        error
+      );
+
+      next(error);
+    }
+  }
+);
+
+// ======================================================
+// RETAILER PAYMENTS
+// GET /api/wholesaler/retailers/:id/payments
+// ======================================================
+
+app.get(
+  "/api/wholesaler/retailers/:id/payments",
+  auth,
+  allow("wholesaler"),
+  async (req, res, next) => {
+    try {
+      const wholesalerId = Number(req.user.id);
+      const retailerId = Number(req.params.id);
+
+      if (!retailerId) {
+        return res.status(400).json({
+          message: "Invalid retailer ID.",
+        });
+      }
+
+      const payments = await q(
+        `
+        SELECT
+          p.id,
+          p.payment_no,
+          p.invoice_id,
+          p.retailer_id,
+          p.wholesaler_id,
+          p.amount,
+          p.method,
+          p.reference_no,
+          p.status,
+          p.paid_at,
+          p.created_at,
+
+          i.invoice_no
+
+        FROM payments p
+
+        LEFT JOIN invoices i
+          ON i.id = p.invoice_id
+
+        WHERE p.wholesaler_id = ?
+          AND p.retailer_id = ?
+
+        ORDER BY
+          COALESCE(p.paid_at, p.created_at) DESC
+        `,
+        [wholesalerId, retailerId]
+      );
+
+      return res.json({
+        payments,
+      });
+    } catch (error) {
+      console.error(
+        "LOAD RETAILER PAYMENTS ERROR:",
+        error
+      );
+
+      next(error);
+    }
+  }
+);
+// ======================================================
+// GET WHOLESALER DELIVERIES
+// GET /api/wholesaler/deliveries
+// ======================================================
+
+app.get(
+  "/api/wholesaler/deliveries",
+  auth,
+  allow("wholesaler"),
+  async (req, res, next) => {
+    try {
+      const wholesalerId = Number(req.user.id);
+
+      const deliveries = await q(
+        `
+        SELECT
+          d.id AS id,
+          CONCAT('DEL-', LPAD(d.id, 6, '0'))
+            AS delivery_no,
+
+          d.order_id,
+          d.wholesaler_id,
+          d.delivery_type,
+          d.delivery_notes,
+          d.status,
+          d.driver_name,
+          d.driver_phone,
+          d.vehicle_number,
+          d.vehicle_number AS vehicle_no,
+          d.dispatched_at,
+          d.delivered_at,
+          d.created_at,
+          d.updated_at,
+
+          po.order_no,
+          po.retailer_id,
+          po.delivery_address,
+          po.required_date,
+          po.notes AS order_notes,
+          po.total_amount,
+
+          u.business_name,
+          u.business_name AS retailer_name,
+          u.name AS contact_name,
+          u.phone AS contact_phone,
+          u.phone AS retailer_phone,
+          u.location
+
+        FROM wholesale_catalog_deliveries d
+
+        INNER JOIN purchase_orders po
+          ON po.id = d.order_id
+
+        INNER JOIN users u
+          ON u.id = po.retailer_id
+          AND u.role = 'retailer'
+
+        WHERE d.wholesaler_id = ?
+
+        ORDER BY d.created_at DESC, d.id DESC
+        `,
+        [wholesalerId]
+      );
+
+      return res.json({
+        deliveries,
+      });
+    } catch (error) {
+      console.error(
+        "LOAD WHOLESALER DELIVERIES ERROR:",
+        error
+      );
+
+      next(error);
+    }
+  }
+);
+// ======================================================
+// GET ONE DELIVERY WITH ITEMS
+// GET /api/wholesaler/deliveries/:id
+// ======================================================
+
+app.get(
+  "/api/wholesaler/deliveries/:id",
+  auth,
+  allow("wholesaler"),
+  async (req, res, next) => {
+    try {
+      const wholesalerId = Number(req.user.id);
+      const deliveryId = Number(req.params.id);
+
+      if (!deliveryId) {
+        return res.status(400).json({
+          message: "Invalid delivery ID.",
+        });
+      }
+
+      const deliveries = await q(
+        `
+        SELECT
+          d.id,
+          CONCAT('DEL-', LPAD(d.id, 6, '0'))
+            AS delivery_no,
+
+          d.order_id,
+          d.wholesaler_id,
+          d.delivery_type,
+          d.delivery_notes,
+          d.delivery_notes AS notes,
+          d.status,
+          d.driver_name,
+          d.driver_phone,
+          d.vehicle_number,
+          d.vehicle_number AS vehicle_no,
+          d.dispatched_at,
+          d.delivered_at,
+          d.created_at,
+          d.updated_at,
+
+          NULL AS packed_at,
+          NULL AS ready_at,
+          NULL AS out_for_delivery_at,
+
+          po.order_no,
+          po.retailer_id,
+          po.delivery_address,
+          po.required_date,
+          po.notes AS order_notes,
+          po.subtotal,
+          po.tax_amount,
+          po.total_amount,
+
+          u.business_name,
+          u.business_name AS retailer_name,
+          u.name AS contact_name,
+          u.phone AS contact_phone,
+          u.phone AS retailer_phone,
+          u.email AS retailer_email,
+          u.location
+
+        FROM wholesale_catalog_deliveries d
+
+        INNER JOIN purchase_orders po
+          ON po.id = d.order_id
+
+        INNER JOIN users u
+          ON u.id = po.retailer_id
+          AND u.role = 'retailer'
+
+        WHERE d.id = ?
+          AND d.wholesaler_id = ?
+
+        LIMIT 1
+        `,
+        [deliveryId, wholesalerId]
+      );
+
+      if (!deliveries.length) {
+        return res.status(404).json({
+          message:
+            "Delivery not found or it does not belong to your business.",
+        });
+      }
+
+      const delivery = deliveries[0];
+
+      const items = await q(
+        `
+        SELECT
+          poi.id,
+          poi.order_id,
+          poi.product_name,
+          poi.quantity,
+          poi.unit,
+          poi.unit_price,
+          poi.notes
+
+        FROM purchase_order_items poi
+
+        WHERE poi.order_id = ?
+
+        ORDER BY poi.id ASC
+        `,
+        [delivery.order_id]
+      );
+
+      return res.json({
+        delivery,
+        items,
+      });
+    } catch (error) {
+      console.error(
+        "LOAD DELIVERY DETAILS ERROR:",
+        error
+      );
+
+      next(error);
+    }
+  }
+);
+// ======================================================
+// GET ONE WHOLESALER INVOICE
+// GET /api/wholesaler/invoices/:id
+// ======================================================
+
+app.get(
+  "/api/wholesaler/invoices/:id",
+  auth,
+  allow("wholesaler"),
+  async (req, res, next) => {
+    try {
+      const wholesalerId = Number(req.user.id);
+      const invoiceId = Number(req.params.id);
+
+      if (!invoiceId) {
+        return res.status(400).json({
+          message: "Invalid invoice ID.",
+        });
+      }
+
+      const invoices = await q(
+        `
+        SELECT
+          i.id,
+          i.invoice_no,
+          i.order_id,
+          i.retailer_id,
+          i.wholesaler_id,
+          i.subtotal,
+          i.tax_amount,
+          i.total_amount,
+          i.paid_amount,
+          i.due_date,
+          i.status,
+          i.created_at,
+
+          po.order_no,
+          po.delivery_address,
+          po.required_date,
+          po.notes AS order_notes,
+
+          retailer.business_name AS retailer_business_name,
+          retailer.name AS retailer_name,
+          retailer.email AS retailer_email,
+          retailer.phone AS retailer_phone,
+          retailer.location AS retailer_location,
+          retailer.address AS retailer_address,
+          retailer.tax_number AS retailer_tax_number,
+
+          merchant.business_name AS merchant_business_name,
+          merchant.name AS merchant_name,
+          merchant.email AS merchant_email,
+          merchant.phone AS merchant_phone,
+          merchant.location AS merchant_location,
+          merchant.address AS merchant_address,
+          merchant.tax_number AS merchant_tax_number,
+          merchant.license_number AS merchant_license_number,
+          merchant.website AS merchant_website,
+          merchant.logo_url AS merchant_logo_url,
+          merchant.description AS merchant_description
+
+        FROM invoices i
+
+        INNER JOIN purchase_orders po
+          ON po.id = i.order_id
+
+        INNER JOIN users retailer
+          ON retailer.id = i.retailer_id
+          AND retailer.role = 'retailer'
+
+        INNER JOIN users merchant
+          ON merchant.id = i.wholesaler_id
+          AND merchant.role = 'wholesaler'
+
+        WHERE i.id = ?
+          AND i.wholesaler_id = ?
+
+        LIMIT 1
+        `,
+        [invoiceId, wholesalerId]
+      );
+
+      if (!invoices.length) {
+        return res.status(404).json({
+          message:
+            "Invoice not found or it does not belong to your business.",
+        });
+      }
+
+      const invoiceRow = invoices[0];
+
+      const items = await q(
+        `
+        SELECT
+          poi.id,
+          poi.order_id,
+          poi.product_name,
+          poi.quantity,
+          poi.unit,
+          poi.unit_price,
+          poi.notes,
+
+          (
+            COALESCE(poi.quantity, 0) *
+            COALESCE(poi.unit_price, 0)
+          ) AS line_total
+
+        FROM purchase_order_items poi
+
+        WHERE poi.order_id = ?
+
+        ORDER BY poi.id ASC
+        `,
+        [invoiceRow.order_id]
+      );
+
+      const payments = await q(
+        `
+        SELECT
+          p.id,
+          p.payment_no,
+          p.invoice_id,
+          p.retailer_id,
+          p.wholesaler_id,
+          p.amount,
+          p.method,
+          p.reference_no,
+          p.status,
+          p.paid_at,
+          p.created_at
+
+        FROM payments p
+
+        WHERE p.invoice_id = ?
+          AND p.wholesaler_id = ?
+
+        ORDER BY
+          COALESCE(p.paid_at, p.created_at) DESC
+        `,
+        [invoiceId, wholesalerId]
+      );
+
+      return res.json({
+        invoice: {
+          id: invoiceRow.id,
+          invoice_no: invoiceRow.invoice_no,
+          order_id: invoiceRow.order_id,
+          order_no: invoiceRow.order_no,
+          retailer_id: invoiceRow.retailer_id,
+          wholesaler_id: invoiceRow.wholesaler_id,
+          subtotal: invoiceRow.subtotal,
+          tax_amount: invoiceRow.tax_amount,
+          total_amount: invoiceRow.total_amount,
+          paid_amount: invoiceRow.paid_amount,
+          due_date: invoiceRow.due_date,
+          status: invoiceRow.status,
+          created_at: invoiceRow.created_at,
+          notes: invoiceRow.order_notes,
+        },
+
+        merchant: {
+          id: invoiceRow.wholesaler_id,
+          business_name:
+            invoiceRow.merchant_business_name,
+          name: invoiceRow.merchant_name,
+          email: invoiceRow.merchant_email,
+          phone: invoiceRow.merchant_phone,
+          location: invoiceRow.merchant_location,
+          address: invoiceRow.merchant_address,
+          tax_number:
+            invoiceRow.merchant_tax_number,
+          license_number:
+            invoiceRow.merchant_license_number,
+          website: invoiceRow.merchant_website,
+          logo_url: invoiceRow.merchant_logo_url,
+          description:
+            invoiceRow.merchant_description,
+        },
+
+        retailer: {
+          id: invoiceRow.retailer_id,
+          business_name:
+            invoiceRow.retailer_business_name,
+          name: invoiceRow.retailer_name,
+          email: invoiceRow.retailer_email,
+          phone: invoiceRow.retailer_phone,
+          location: invoiceRow.retailer_location,
+          address: invoiceRow.retailer_address,
+          tax_number:
+            invoiceRow.retailer_tax_number,
+        },
+
+        items,
+        payments,
+      });
+    } catch (error) {
+      console.error(
+        "LOAD INVOICE DETAILS ERROR:",
+        error
+      );
+
+      next(error);
+    }
+  }
+);
+// ======================================================
+// WHOLESALER PAYMENTS MODULE
+// Add before your final 404 handler and app.listen().
+// Requires existing: app, auth, allow, q, pool.
+// ======================================================
+
+// GET /api/wholesaler/payments
+app.get(
+  "/api/wholesaler/payments",
+  auth,
+  allow("wholesaler"),
+  async (req, res, next) => {
+    try {
+      const payments = await q(
+        `
+        SELECT
+          p.id,
+          p.payment_no,
+          p.invoice_id,
+          p.retailer_id,
+          p.wholesaler_id,
+          p.amount,
+          p.method,
+          p.reference_no,
+          p.status,
+          p.paid_at,
+          p.created_at,
+
+          i.invoice_no,
+          i.total_amount AS invoice_total,
+          i.paid_amount AS invoice_paid_amount,
+          i.due_date,
+          i.status AS invoice_status,
+
+          u.business_name,
+          u.business_name AS retailer_name,
+          u.name AS retailer_contact,
+          u.phone AS retailer_phone
+
+        FROM payments p
+
+        INNER JOIN invoices i
+          ON i.id = p.invoice_id
+
+        INNER JOIN users u
+          ON u.id = p.retailer_id
+          AND u.role = 'retailer'
+
+        WHERE p.wholesaler_id = ?
+
+        ORDER BY
+          COALESCE(p.paid_at, p.created_at) DESC,
+          p.id DESC
+        `,
+        [Number(req.user.id)]
+      );
+
+      return res.json({ payments });
+    } catch (error) {
+      console.error("LOAD WHOLESALER PAYMENTS ERROR:", error);
+      next(error);
+    }
+  }
+);
+
+// GET /api/wholesaler/payments/:id
+app.get(
+  "/api/wholesaler/payments/:id",
+  auth,
+  allow("wholesaler"),
+  async (req, res, next) => {
+    try {
+      const wholesalerId = Number(req.user.id);
+      const paymentId = Number(req.params.id);
+
+      if (!paymentId) {
+        return res.status(400).json({
+          message: "Invalid payment ID.",
+        });
+      }
+
+      const rows = await q(
+        `
+        SELECT
+          p.id,
+          p.payment_no,
+          p.invoice_id,
+          p.retailer_id,
+          p.wholesaler_id,
+          p.amount,
+          p.method,
+          p.reference_no,
+          p.status,
+          p.paid_at,
+          p.created_at,
+
+          i.invoice_no,
+          i.order_id,
+          i.subtotal,
+          i.tax_amount,
+          i.total_amount,
+          i.paid_amount,
+          i.due_date,
+          i.status AS invoice_status,
+
+          retailer.business_name AS retailer_business_name,
+          retailer.name AS retailer_name,
+          retailer.email AS retailer_email,
+          retailer.phone AS retailer_phone,
+          retailer.location AS retailer_location,
+          retailer.address AS retailer_address,
+          retailer.tax_number AS retailer_tax_number,
+
+          merchant.business_name AS merchant_business_name,
+          merchant.name AS merchant_name,
+          merchant.email AS merchant_email,
+          merchant.phone AS merchant_phone,
+          merchant.location AS merchant_location,
+          merchant.address AS merchant_address,
+          merchant.tax_number AS merchant_tax_number,
+          merchant.license_number AS merchant_license_number,
+          merchant.website AS merchant_website,
+          merchant.logo_url AS merchant_logo_url
+
+        FROM payments p
+
+        INNER JOIN invoices i
+          ON i.id = p.invoice_id
+
+        INNER JOIN users retailer
+          ON retailer.id = p.retailer_id
+          AND retailer.role = 'retailer'
+
+        INNER JOIN users merchant
+          ON merchant.id = p.wholesaler_id
+          AND merchant.role = 'wholesaler'
+
+        WHERE p.id = ?
+          AND p.wholesaler_id = ?
+
+        LIMIT 1
+        `,
+        [paymentId, wholesalerId]
+      );
+
+      if (!rows.length) {
+        return res.status(404).json({
+          message:
+            "Payment not found or it does not belong to your business.",
+        });
+      }
+
+      const row = rows[0];
+
+      return res.json({
+        payment: {
+          id: row.id,
+          payment_no: row.payment_no,
+          invoice_id: row.invoice_id,
+          invoice_no: row.invoice_no,
+          retailer_id: row.retailer_id,
+          wholesaler_id: row.wholesaler_id,
+          amount: row.amount,
+          method: row.method,
+          reference_no: row.reference_no,
+          status: row.status,
+          paid_at: row.paid_at,
+          created_at: row.created_at,
+        },
+
+        invoice: {
+          id: row.invoice_id,
+          invoice_no: row.invoice_no,
+          order_id: row.order_id,
+          subtotal: row.subtotal,
+          tax_amount: row.tax_amount,
+          total_amount: row.total_amount,
+          paid_amount: row.paid_amount,
+          due_date: row.due_date,
+          status: row.invoice_status,
+        },
+
+        retailer: {
+          id: row.retailer_id,
+          business_name: row.retailer_business_name,
+          name: row.retailer_name,
+          email: row.retailer_email,
+          phone: row.retailer_phone,
+          location: row.retailer_location,
+          address: row.retailer_address,
+          tax_number: row.retailer_tax_number,
+        },
+
+        merchant: {
+          id: row.wholesaler_id,
+          business_name: row.merchant_business_name,
+          name: row.merchant_name,
+          email: row.merchant_email,
+          phone: row.merchant_phone,
+          location: row.merchant_location,
+          address: row.merchant_address,
+          tax_number: row.merchant_tax_number,
+          license_number: row.merchant_license_number,
+          website: row.merchant_website,
+          logo_url: row.merchant_logo_url,
+        },
+      });
+    } catch (error) {
+      console.error("LOAD PAYMENT DETAILS ERROR:", error);
+      next(error);
+    }
+  }
+);
+
+// POST /api/wholesaler/payments
+app.post(
+  "/api/wholesaler/payments",
+  auth,
+  allow("wholesaler"),
+  async (req, res, next) => {
+    let connection;
+
+    try {
+      const wholesalerId = Number(req.user.id);
+      const {
+        invoice_id,
+        amount,
+        method = "bank_transfer",
+        reference_no,
+        status = "paid",
+        paid_at,
+      } = req.body || {};
+
+      const invoiceId = Number(invoice_id);
+      const paymentAmount = Number(amount);
+
+      const allowedMethods = [
+        "cash",
+        "bank_transfer",
+        "card",
+        "credit",
+      ];
+
+      const allowedStatuses = [
+        "pending",
+        "paid",
+        "failed",
+      ];
+
+      if (!invoiceId) {
+        return res.status(400).json({
+          message: "Invoice is required.",
+        });
+      }
+
+      if (!paymentAmount || paymentAmount <= 0) {
+        return res.status(400).json({
+          message: "Enter a valid payment amount.",
+        });
+      }
+
+      if (!allowedMethods.includes(method)) {
+        return res.status(400).json({
+          message: "Invalid payment method.",
+        });
+      }
+
+      if (!allowedStatuses.includes(status)) {
+        return res.status(400).json({
+          message: "Invalid payment status.",
+        });
+      }
+
+      connection = await pool.getConnection();
+      await connection.beginTransaction();
+
+      const [invoiceRows] = await connection.query(
+        `
+        SELECT
+          id,
+          invoice_no,
+          retailer_id,
+          wholesaler_id,
+          total_amount,
+          paid_amount,
+          status
+        FROM invoices
+        WHERE id = ?
+          AND wholesaler_id = ?
+        LIMIT 1
+        FOR UPDATE
+        `,
+        [invoiceId, wholesalerId]
+      );
+
+      if (!invoiceRows.length) {
+        await connection.rollback();
+
+        return res.status(404).json({
+          message:
+            "Invoice not found or it does not belong to your business.",
+        });
+      }
+
+      const invoice = invoiceRows[0];
+
+      const outstanding = Math.max(
+        Number(invoice.total_amount || 0) -
+        Number(invoice.paid_amount || 0),
+        0
+      );
+
+      if (paymentAmount > outstanding) {
+        await connection.rollback();
+
+        return res.status(400).json({
+          message:
+            "Payment amount cannot exceed the invoice balance.",
+          outstanding,
+        });
+      }
+
+      const [numberRows] = await connection.query(
+        `
+        SELECT COALESCE(MAX(id), 0) + 1 AS next_number
+        FROM payments
+        `
+      );
+
+      const paymentNo = `PAY-${String(
+        numberRows[0].next_number
+      ).padStart(5, "0")}`;
+
+      const paymentDate =
+        paid_at ||
+        (status === "paid" ? new Date() : null);
+
+      const [result] = await connection.query(
+        `
+        INSERT INTO payments (
+          payment_no,
+          invoice_id,
+          retailer_id,
+          wholesaler_id,
+          amount,
+          method,
+          reference_no,
+          status,
+          paid_at,
+          created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        `,
+        [
+          paymentNo,
+          invoiceId,
+          invoice.retailer_id,
+          wholesalerId,
+          paymentAmount,
+          method,
+          reference_no || null,
+          status,
+          paymentDate,
+        ]
+      );
+
+      if (status === "paid") {
+        const newPaidAmount =
+          Number(invoice.paid_amount || 0) +
+          paymentAmount;
+
+        const newInvoiceStatus =
+          newPaidAmount >= Number(invoice.total_amount)
+            ? "paid"
+            : "partial";
+
+        await connection.query(
+          `
+          UPDATE invoices
+          SET
+            paid_amount = ?,
+            status = ?
+          WHERE id = ?
+            AND wholesaler_id = ?
+          `,
+          [
+            newPaidAmount,
+            newInvoiceStatus,
+            invoiceId,
+            wholesalerId,
+          ]
+        );
+      }
+
+      await connection.commit();
+
+      return res.status(201).json({
+        message: "Payment recorded successfully.",
+        payment: {
+          id: result.insertId,
+          payment_no: paymentNo,
+          invoice_id: invoiceId,
+          retailer_id: invoice.retailer_id,
+          wholesaler_id: wholesalerId,
+          amount: paymentAmount,
+          method,
+          reference_no: reference_no || null,
+          status,
+          paid_at: paymentDate,
+        },
+      });
+    } catch (error) {
+      if (connection) {
+        try {
+          await connection.rollback();
+        } catch (rollbackError) {
+          console.error(
+            "PAYMENT ROLLBACK ERROR:",
+            rollbackError
+          );
+        }
+      }
+
+      console.error("RECORD PAYMENT ERROR:", error);
+      next(error);
+    } finally {
+      if (connection) {
+        connection.release();
+      }
+    }
+  }
+);
+
 app.listen(process.env.PORT || 5000, () => console.log(`Tofado API running on ${process.env.PORT || 5000}`));

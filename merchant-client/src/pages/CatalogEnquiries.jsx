@@ -22,50 +22,62 @@ import "./Commerce-Google.css";
 const statuses = ["new", "contacted", "quoted", "closed"];
 
 export default function CatalogEnquiries() {
-  const [enquiries, setEnquiries] = useState(null);
+const [enquiries, setEnquiries] = useState([]);
+const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [updatingId, setUpdatingId] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
-  const loadEnquiries = async (showRefresh = false) => {
-    try {
-      if (showRefresh) {
-        setRefreshing(true);
-      }
-
-      setError("");
-
-      const response = await api.get(
-        "/wholesaler/catalog/enquiries"
-      );
-
-      setEnquiries(response.data || []);
-    } catch (requestError) {
-      setError(
-        requestError.response?.data?.message ||
-          "Unable to load catalog enquiries."
-      );
-
-      setEnquiries([]);
-    } finally {
-      setRefreshing(false);
+const loadEnquiries = async (showRefresh = false) => {
+  try {
+    if (showRefresh) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
     }
-  };
+
+    setError("");
+
+    const { data } = await api.get(
+      "/wholesaler/catalog/enquiries"
+    );
+
+    setEnquiries(
+      Array.isArray(data)
+        ? data
+        : Array.isArray(data.enquiries)
+          ? data.enquiries
+          : []
+    );
+  } catch (err) {
+    console.error(err);
+
+    setEnquiries([]);
+
+    setError(
+      err.response?.data?.message ||
+        "Unable to load catalog enquiries."
+    );
+  } finally {
+    setLoading(false);
+    setRefreshing(false);
+  }
+};
 
   useEffect(() => {
     loadEnquiries();
   }, []);
 
   const filteredEnquiries = useMemo(() => {
-    if (!enquiries) {
-      return [];
-    }
+   if (loading) {
+  return <Spinner />;
+}
 
     const value = search.trim().toLowerCase();
 
-    return enquiries.filter((enquiry) => {
+   return (enquiries || []).filter((enquiry) => {
       const matchesSearch =
         !value ||
         [
@@ -91,7 +103,7 @@ export default function CatalogEnquiries() {
   }, [enquiries, search, statusFilter]);
 
   const summary = useMemo(() => {
-    if (!enquiries) {
+  if (!Array.isArray(enquiries)) {
       return {
         total: 0,
         new: 0,

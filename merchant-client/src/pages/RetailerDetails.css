@@ -1,0 +1,538 @@
+.retailer-details-page {
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 28px;
+  color: #202124;
+}
+
+.retailer-details-header {
+  margin-bottom: 22px;
+}
+
+.retailer-details-back {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 20px;
+  padding: 0 13px;
+  border: 1px solid #dadce0;
+  border-radius: 9px;
+  color: #3c4043;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.retailer-details-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.retailer-details-identity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 15px;
+}
+
+.retailer-details-avatar {
+  display: grid;
+  width: 58px;
+  height: 58px;
+  flex: 0 0 58px;
+  place-items: center;
+  border-radius: 16px;
+  color: #1a73e8;
+  background: #e8f0fe;
+}
+
+.retailer-details-kicker {
+  margin-bottom: 6px;
+  color: #1a73e8;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.retailer-details-name-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.retailer-details-name-line h1 {
+  overflow: hidden;
+  margin: 0;
+  font-size: 31px;
+  line-height: 1.1;
+  letter-spacing: -0.035em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.retailer-details-identity p {
+  margin: 7px 0 0;
+  color: #5f6368;
+  font-size: 13px;
+}
+
+.retailer-details-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 9px;
+}
+
+.retailer-detail-primary-button,
+.retailer-detail-secondary-button {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 15px;
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.retailer-detail-secondary-button {
+  border: 1px solid #dadce0;
+  color: #1a73e8;
+  background: #fff;
+}
+
+.retailer-detail-primary-button {
+  border: 1px solid #1a73e8;
+  color: #fff;
+  background: #1a73e8;
+}
+
+.retailer-details-alert {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border: 1px solid #f6c5c1;
+  border-radius: 9px;
+  color: #b3261e;
+  background: #fce8e6;
+  font-size: 12px;
+}
+
+.retailer-details-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.retailer-details-summary article {
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+  padding: 17px;
+  border: 1px solid #dadce0;
+  border-radius: 13px;
+  background: #fff;
+}
+
+.retailer-details-summary article > span {
+  color: #5f6368;
+  font-size: 10px;
+}
+
+.retailer-details-summary article > strong {
+  overflow: hidden;
+  font-size: 20px;
+  letter-spacing: -0.02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.retailer-summary-icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 11px;
+}
+
+.retailer-summary-icon.blue {
+  color: #1a73e8;
+  background: #e8f0fe;
+}
+
+.retailer-summary-icon.purple {
+  color: #7e57c2;
+  background: #f3e8fd;
+}
+
+.retailer-summary-icon.orange {
+  color: #e37400;
+  background: #fef7e0;
+}
+
+.retailer-summary-icon.green {
+  color: #188038;
+  background: #e6f4ea;
+}
+
+.retailer-details-workspace {
+  overflow: hidden;
+  border: 1px solid #dadce0;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.retailer-details-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 10px 12px 0;
+  border-bottom: 1px solid #dadce0;
+  background: #fff;
+}
+
+.retailer-details-tabs button {
+  position: relative;
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 14px;
+  border: 0;
+  color: #5f6368;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.retailer-details-tabs button.active {
+  color: #1a73e8;
+}
+
+.retailer-details-tabs button.active::after {
+  position: absolute;
+  right: 10px;
+  bottom: -1px;
+  left: 10px;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: #1a73e8;
+  content: "";
+}
+
+.retailer-details-content {
+  min-height: 380px;
+  padding: 20px;
+  background: #f8f9fa;
+}
+
+.retailer-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.retailer-detail-card {
+  padding: 19px;
+  border: 1px solid #e5e7ea;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.retailer-detail-card-heading {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-bottom: 16px;
+}
+
+.retailer-detail-card-heading > div {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  place-items: center;
+  border-radius: 10px;
+  color: #1a73e8;
+  background: #e8f0fe;
+}
+
+.retailer-detail-card-heading strong,
+.retailer-detail-card-heading small {
+  display: block;
+}
+
+.retailer-detail-card-heading strong {
+  font-size: 13px;
+}
+
+.retailer-detail-card-heading small {
+  margin-top: 3px;
+  color: #80868b;
+  font-size: 9px;
+}
+
+.retailer-information-list {
+  display: grid;
+  gap: 8px;
+}
+
+.retailer-information-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 11px;
+  border-radius: 9px;
+  color: inherit;
+  background: #f8f9fa;
+  text-decoration: none;
+}
+
+.retailer-information-row svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: #80868b;
+}
+
+.retailer-information-row small,
+.retailer-information-row strong {
+  display: block;
+}
+
+.retailer-information-row small {
+  color: #80868b;
+  font-size: 9px;
+}
+
+.retailer-information-row strong {
+  margin-top: 3px;
+  font-size: 11px;
+}
+
+.retailer-address-block,
+.retailer-notes-block {
+  min-height: 120px;
+  padding: 14px;
+  border-radius: 10px;
+  background: #f8f9fa;
+}
+
+.retailer-address-block strong {
+  font-size: 12px;
+}
+
+.retailer-address-block p,
+.retailer-notes-block {
+  color: #5f6368;
+  font-size: 11px;
+  line-height: 1.7;
+  white-space: pre-line;
+}
+
+.retailer-address-block p {
+  margin: 8px 0 0;
+}
+
+.retailer-commercial-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.retailer-commercial-grid > div {
+  padding: 12px;
+  border-radius: 9px;
+  background: #f8f9fa;
+}
+
+.retailer-commercial-grid span,
+.retailer-commercial-grid strong {
+  display: block;
+}
+
+.retailer-commercial-grid span {
+  color: #80868b;
+  font-size: 9px;
+}
+
+.retailer-commercial-grid strong {
+  margin-top: 5px;
+  font-size: 11px;
+}
+
+.retailer-record-list {
+  display: grid;
+  gap: 8px;
+}
+
+.retailer-record-row {
+  display: grid;
+  grid-template-columns:
+    minmax(210px, 1.5fr)
+    repeat(3, minmax(110px, 0.8fr))
+    auto
+    20px;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 13px 14px;
+  border: 1px solid #e5e7ea;
+  border-radius: 10px;
+  color: #202124;
+  background: #fff;
+  text-align: left;
+}
+
+button.retailer-record-row {
+  cursor: pointer;
+}
+
+button.retailer-record-row:hover {
+  border-color: #a8c7fa;
+  background: #f8fbff;
+}
+
+.retailer-record-leading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.retailer-record-icon {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  place-items: center;
+  border-radius: 10px;
+  color: #1a73e8;
+  background: #e8f0fe;
+}
+
+.retailer-record-row small,
+.retailer-record-row strong {
+  display: block;
+}
+
+.retailer-record-row small {
+  color: #80868b;
+  font-size: 8px;
+}
+
+.retailer-record-row strong {
+  overflow: hidden;
+  margin-top: 4px;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.retailer-tab-loader,
+.retailer-tab-empty {
+  display: grid;
+  min-height: 330px;
+  place-items: center;
+  align-content: center;
+  color: #80868b;
+  text-align: center;
+}
+
+.retailer-tab-loader {
+  gap: 10px;
+  font-size: 12px;
+}
+
+.retailer-tab-empty h3 {
+  margin: 10px 0 0;
+  color: #3c4043;
+  font-size: 15px;
+}
+
+.retailer-tab-empty p {
+  margin: 6px 0 0;
+  font-size: 11px;
+}
+
+.retailer-detail-spin {
+  animation: retailer-detail-spin 800ms linear infinite;
+}
+
+@keyframes retailer-detail-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 1050px) {
+  .retailer-details-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .retailer-record-row {
+    grid-template-columns: minmax(190px, 1.4fr) repeat(2, 1fr) auto 20px;
+  }
+
+  .retailer-record-row > div:nth-of-type(4) {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .retailer-details-page {
+    padding: 18px 14px 32px;
+  }
+
+  .retailer-details-title-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .retailer-details-name-line {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .retailer-details-name-line h1 {
+    font-size: 26px;
+    white-space: normal;
+  }
+
+  .retailer-details-actions {
+    width: 100%;
+  }
+
+  .retailer-detail-primary-button,
+  .retailer-detail-secondary-button {
+    flex: 1;
+  }
+
+  .retailer-details-summary,
+  .retailer-overview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .retailer-details-tabs {
+    overflow-x: auto;
+  }
+
+  .retailer-details-content {
+    padding: 12px;
+  }
+
+  .retailer-record-row {
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+  }
+
+  .retailer-record-row > div:not(.retailer-record-leading),
+  .retailer-record-row > svg {
+    display: none;
+  }
+}

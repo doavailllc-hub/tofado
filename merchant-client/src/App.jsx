@@ -20,6 +20,15 @@ import CatalogOrders from "./pages/CatalogOrders";
 import CatalogEnquiries from "./pages/CatalogEnquiries";
 import PublicCatalog from "./pages/PublicCatalog";
 import AdminRequests from "./pages/AdminRequests";
+import AddRetailer from "./pages/AddRetailer";
+import AddRetailerFromEnquiry from "./pages/AddRetailerFromEnquiry";
+import RetailerDetails from "./pages/RetailerDetails";
+import DeliveryList from "./pages/DeliveryList";
+import DeliveryDetails from "./pages/DeliveryDetails";
+import InvoiceDetails from "./pages/InvoiceDetails";
+import PaymentList from "./pages/PaymentList";
+import RecordPayment from "./pages/RecordPayment";
+import PaymentDetails from "./pages/PaymentDetails";
 export default function App() {
   return (
     <Routes>
@@ -38,6 +47,7 @@ export default function App() {
           </ProtectedRoute>
         }
       >
+  
         <Route path="/retailer" element={<Dashboard />} />
         <Route
           path="/retailer/new-order"
@@ -75,7 +85,10 @@ export default function App() {
           path="/wholesaler/catalog/new"
           element={<ProductForm />}
         />
-
+<Route
+  path="/wholesaler/invoices/:id"
+  element={<InvoiceDetails />}
+/>
         <Route
           path="/wholesaler/catalog/:id/edit"
           element={<ProductForm />}
@@ -90,14 +103,30 @@ export default function App() {
           path="/wholesaler/enquiries"
           element={<CatalogEnquiries />}
         />
+<Route
+  path="/wholesaler/deliveries"
+  element={<DeliveryList />}
+/>
 
+<Route
+  path="/wholesaler/deliveries/:id"
+  element={<DeliveryDetails />}
+/>
         <Route
           path="/wholesaler/retailers"
           element={
             <DataPage type="wholesaler-retailers" />
           }
         />
+      <Route
+  path="/wholesaler/retailers/new"
+  element={<AddRetailer />}
+/>
 
+<Route
+  path="/wholesaler/retailers/from-enquiry"
+  element={<AddRetailerFromEnquiry />}
+/>
         <Route
           path="/wholesaler/orders"
           element={
@@ -118,13 +147,24 @@ export default function App() {
             <DataPage type="wholesaler-invoices" />
           }
         />
-
+<Route
+  path="/wholesaler/retailers/:id"
+  element={<RetailerDetails />}
+/>
         <Route
-          path="/wholesaler/payments"
-          element={
-            <DataPage type="wholesaler-payments" />
-          }
-        />
+  path="/wholesaler/payments"
+  element={<PaymentList />}
+/>
+
+<Route
+  path="/wholesaler/payments/new"
+  element={<RecordPayment />}
+/>
+
+<Route
+  path="/wholesaler/payments/:id"
+  element={<PaymentDetails />}
+/>
 
         <Route
           path="/wholesaler/profile"

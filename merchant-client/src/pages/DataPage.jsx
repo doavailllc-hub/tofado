@@ -1,15 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+
 import {
   ArrowDownUp,
-  Building2,
-  CalendarDays,
   CheckCircle2,
   CircleDollarSign,
   Clock3,
   FileText,
   Filter,
   MapPin,
+  MessageSquarePlus,
   PackageCheck,
+  Plus,
   RefreshCw,
   Search,
   ShoppingCart,
@@ -26,6 +28,7 @@ import {
   Spinner,
   statusTone,
 } from "../components/UI";
+
 import "./DataPage-Google.css";
 
 const configs = {
@@ -395,6 +398,7 @@ function getRowIcon(type) {
 }
 
 export default function DataPage({ type }) {
+  const navigate = useNavigate();
   const config = configs[type];
 
   const [rows, setRows] = useState(null);
@@ -404,7 +408,30 @@ export default function DataPage({ type }) {
   const [refreshing, setRefreshing] = useState(false);
   const [updatingId, setUpdatingId] = useState(null);
   const [error, setError] = useState("");
+const openRow = (row) => {
+  if (!row?.id) return;
 
+  switch (type) {
+    case "wholesaler-retailers":
+      navigate(`/wholesaler/retailers/${row.id}`);
+      break;
+
+    case "wholesaler-invoices":
+      navigate(`/wholesaler/invoices/${row.id}`);
+      break;
+
+    case "wholesaler-deliveries":
+      navigate(`/wholesaler/deliveries/${row.id}`);
+      break;
+
+    case "wholesaler-payments":
+      navigate(`/wholesaler/payments/${row.id}`);
+      break;
+
+    default:
+      break;
+  }
+};
   const load = async (showRefresh = false) => {
     try {
       if (showRefresh) {
@@ -579,20 +606,46 @@ export default function DataPage({ type }) {
 
   return (
     <div className={`merchant-data-page data-accent-${config.accent}`}>
-      <section className="data-page-header">
-        <div className="data-page-header-copy">
-          <span className="data-page-eyebrow">
-            {config.eyebrow}
-          </span>
+     <section className="data-page-header">
+  <div className="data-page-header-copy">
+    <span className="data-page-eyebrow">
+      {config.eyebrow}
+    </span>
 
-          <h1>{config.title}</h1>
-          <p>{config.subtitle}</p>
-        </div>
+    <h1>{config.title}</h1>
+    <p>{config.subtitle}</p>
+  </div>
 
-        <div className="data-page-header-icon">
-          <HeaderIcon size={28} />
-        </div>
-      </section>
+  {type === "wholesaler-retailers" ? (
+    <div className="retailer-header-actions">
+      <button
+        type="button"
+        className="retailer-secondary-action"
+        onClick={() =>
+          navigate("/wholesaler/retailers/from-enquiry")
+        }
+      >
+        <MessageSquarePlus size={17} />
+        Add from enquiry
+      </button>
+
+      <button
+        type="button"
+        className="retailer-primary-action"
+        onClick={() =>
+          navigate("/wholesaler/retailers/new")
+        }
+      >
+        <Plus size={17} />
+        Add retailer
+      </button>
+    </div>
+  ) : (
+    <div className="data-page-header-icon">
+      <HeaderIcon size={28} />
+    </div>
+  )}
+</section>
 
       <section className="data-summary-grid">
         <article className="data-summary-card summary-total">
@@ -742,7 +795,20 @@ export default function DataPage({ type }) {
 
                   <tbody>
                     {filteredRows.map((row) => (
-                      <tr key={`${type}-${row.id}`}>
+                 <tr
+  key={`${type}-${row.id}`}
+className={
+  [
+    "wholesaler-retailers",
+    "wholesaler-invoices",
+    "wholesaler-payments",
+    "wholesaler-deliveries",
+  ].includes(type)
+    ? "data-clickable-row"
+    : ""
+}
+  onClick={() => openRow(row)}
+>
                         {config.cols.map((column, columnIndex) => (
                           <td key={column}>
                             {columnIndex === 0 ? (
@@ -836,10 +902,16 @@ export default function DataPage({ type }) {
 
             <div className="data-mobile-list">
               {filteredRows.map((row) => (
-                <article
-                  className="data-mobile-card"
-                  key={`mobile-${type}-${row.id}`}
-                >
+    <article
+  className={
+    type === "wholesaler-retailers" ||
+    type === "wholesaler-invoices"
+      ? "data-mobile-card data-clickable-row"
+      : "data-mobile-card"
+  }
+  key={`mobile-${type}-${row.id}`}
+  onClick={() => openRow(row)}
+>
                   <div className="data-mobile-card-header">
                     <div className="data-mobile-title">
                       <div className="data-row-icon">
