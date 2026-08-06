@@ -3952,6 +3952,11 @@ app.post(
 // PUT /api/wholesaler/catalog/settings
 // ======================================================
 
+// ======================================================
+// UPDATE CATALOG STOREFRONT SETTINGS
+// PUT /api/wholesaler/catalog/settings
+// ======================================================
+
 app.put(
   "/api/wholesaler/catalog/settings",
   auth,
@@ -3973,6 +3978,12 @@ app.put(
         catalog_description || ""
       ).trim();
 
+      if (!cleanTitle) {
+        return res.status(400).json({
+          message: "Catalog title is required.",
+        });
+      }
+
       if (cleanTitle.length > 180) {
         return res.status(400).json({
           message:
@@ -3989,7 +4000,7 @@ app.put(
 
       const result = await q(
         `
-        UPDATE catalogs
+        UPDATE wholesale_catalogs
         SET
           catalog_title = ?,
           catalog_description = ?,
@@ -3997,7 +4008,7 @@ app.put(
         WHERE wholesaler_id = ?
         `,
         [
-          cleanTitle || null,
+          cleanTitle,
           cleanDescription || null,
           wholesalerId,
         ]
@@ -4009,16 +4020,21 @@ app.put(
         });
       }
 
-      const catalogs = await q(
+      const [catalog] = await q(
         `
         SELECT
           id,
+          wholesaler_id,
           slug,
+          title,
           catalog_title,
           catalog_description,
           cover_image_url,
-          cover_updated_at
-        FROM catalogs
+          cover_updated_at,
+          is_published,
+          created_at,
+          updated_at
+        FROM wholesale_catalogs
         WHERE wholesaler_id = ?
         LIMIT 1
         `,
@@ -4026,8 +4042,9 @@ app.put(
       );
 
       return res.json({
-        message: "Catalog settings updated successfully.",
-        catalog: catalogs[0],
+        message:
+          "Storefront settings updated successfully.",
+        catalog,
       });
     } catch (error) {
       console.error(
