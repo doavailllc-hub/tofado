@@ -95,7 +95,14 @@ export default function PaymentDetails() {
             <div className="payment-receipt-title">
               <span>Payment receipt</span>
               <h2>{payment.payment_no || `PAY-${payment.id}`}</h2>
-              <Badge tone={statusTone(payment.status)}>{readable(payment.status)}</Badge>
+
+              <div className="payment-receipt-title-row">
+                <Badge tone={statusTone(payment.status)}>
+                  {readable(payment.status)}
+                </Badge>
+
+                <strong>{money(payment.amount)}</strong>
+              </div>
             </div>
           </section>
 

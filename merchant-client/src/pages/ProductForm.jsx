@@ -14,7 +14,7 @@ import {
 
 import api from "../services/api";
 import { Spinner } from "../components/UI";
-import "./Commerce-Google.css";
+import "./ProductForm.css";
 
 const initialForm = {
   name: "",
@@ -26,6 +26,7 @@ const initialForm = {
   unit: "piece",
   pack_size: "",
   minimum_order: 1,
+  price_mode: "fixed",
   price: "",
   stock_quantity: "",
   is_active: true,
@@ -100,12 +101,16 @@ export default function ProductForm() {
   }, [editing, id]);
 
   const previewPrice = useMemo(() => {
+    if (form.price_mode === "quote") {
+      return "Price on request";
+    }
+
     const value = Number(form.price || 0);
 
     return Number.isFinite(value)
-      ? value.toFixed(2)
-      : "0.00";
-  }, [form.price]);
+      ? `SAR ${value.toFixed(2)}`
+      : "SAR 0.00";
+  }, [form.price, form.price_mode]);
 
   const updateField = (key, value) => {
     setError("");
@@ -125,8 +130,11 @@ export default function ProductForm() {
       return;
     }
 
-    if (Number(form.price) < 0) {
-      setError("Price cannot be negative.");
+    if (
+      form.price_mode === "fixed" &&
+      (form.price === "" || Number(form.price) < 0)
+    ) {
+      setError("Enter a valid product price.");
       return;
     }
 
@@ -154,7 +162,11 @@ export default function ProductForm() {
         minimum_order: Number(
           form.minimum_order || 1
         ),
-        price: Number(form.price || 0),
+        price_mode: form.price_mode,
+        price:
+          form.price_mode === "quote"
+            ? null
+            : Number(form.price || 0),
         stock_quantity:
           form.stock_quantity === ""
             ? null
@@ -216,8 +228,7 @@ export default function ProductForm() {
           </h1>
 
           <p>
-            Add product details, pricing, stock information,
-            and image for your public catalog.
+            Add product information, choose how pricing is displayed, manage stock, and preview the public listing.
           </p>
         </div>
 
@@ -356,8 +367,8 @@ export default function ProductForm() {
                 <span>Commercial details</span>
                 <h2>Pricing and quantity</h2>
                 <p>
-                  Set the selling unit, price, minimum order,
-                  and stock.
+                  Choose whether to show a fixed price or ask
+                  customers to request a quotation.
                 </p>
               </div>
             </div>
@@ -387,23 +398,52 @@ export default function ProductForm() {
               </label>
 
               <label className="product-form-field">
-                <span>Unit price (SAR)</span>
+                <span>Price display</span>
 
-                <input
-                  required
-                  min="0"
-                  step="0.01"
-                  type="number"
-                  value={form.price}
-                  placeholder="0.00"
+                <select
+                  value={form.price_mode}
                   onChange={(event) =>
                     updateField(
-                      "price",
+                      "price_mode",
                       event.target.value
                     )
                   }
-                />
+                >
+                  <option value="fixed">
+                    Show product price
+                  </option>
+
+                  <option value="quote">
+                    Price on request
+                  </option>
+                </select>
+
+                <small className="product-form-help">
+                  Choose “Price on request” when the selling
+                  price should not be shown publicly.
+                </small>
               </label>
+
+              {form.price_mode === "fixed" && (
+                <label className="product-form-field">
+                  <span>Unit price (SAR)</span>
+
+                  <input
+                    required
+                    min="0"
+                    step="0.01"
+                    type="number"
+                    value={form.price}
+                    placeholder="0.00"
+                    onChange={(event) =>
+                      updateField(
+                        "price",
+                        event.target.value
+                      )
+                    }
+                  />
+                </label>
+              )}
 
               <label className="product-form-field">
                 <span>Minimum order</span>
@@ -574,13 +614,19 @@ export default function ProductForm() {
               "Brand and pack size"}
           </p>
 
-          <div className="product-preview-price">
-            <strong>
-              SAR {previewPrice}
-            </strong>
+          <div
+            className={`product-preview-price ${
+              form.price_mode === "quote"
+                ? "price-on-request"
+                : ""
+            }`}
+          >
+            <strong>{previewPrice}</strong>
 
             <small>
-              per {form.unit}
+              {form.price_mode === "quote"
+                ? "Contact merchant for quotation"
+                : `per ${form.unit}`}
             </small>
           </div>
 

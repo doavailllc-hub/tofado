@@ -17,7 +17,7 @@ import {
   Spinner,
   statusTone,
 } from "../components/UI";
-import "./Commerce-Google.css";
+import "./CatalogEnquiries.css";
 
 const statuses = ["new", "contacted", "quoted", "closed"];
 
@@ -71,10 +71,6 @@ const loadEnquiries = async (showRefresh = false) => {
   }, []);
 
   const filteredEnquiries = useMemo(() => {
-   if (loading) {
-  return <Spinner />;
-}
-
     const value = search.trim().toLowerCase();
 
    return (enquiries || []).filter((enquiry) => {
@@ -174,7 +170,7 @@ const loadEnquiries = async (showRefresh = false) => {
     }
   };
 
-  if (!enquiries) {
+  if (loading) {
     return <Spinner />;
   }
 
@@ -377,6 +373,35 @@ const loadEnquiries = async (showRefresh = false) => {
                     {enquiry.message ||
                       "No enquiry message was provided."}
                   </p>
+                </div>
+
+                <div className="catalog-enquiry-contact-actions">
+                  {enquiry.phone && (
+                    <a href={`tel:${enquiry.phone}`}>
+                      <Phone size={15} />
+                      Call
+                    </a>
+                  )}
+
+                  {enquiry.phone && (
+                    <a
+                      href={`https://wa.me/${String(
+                        enquiry.phone
+                      ).replace(/\D/g, "")}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      <MessageSquare size={15} />
+                      WhatsApp
+                    </a>
+                  )}
+
+                  {enquiry.email && (
+                    <a href={`mailto:${enquiry.email}`}>
+                      <Mail size={15} />
+                      Email
+                    </a>
+                  )}
                 </div>
 
                 <div className="catalog-enquiry-footer">

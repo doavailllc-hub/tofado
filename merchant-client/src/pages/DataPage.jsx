@@ -29,7 +29,7 @@ import {
   statusTone,
 } from "../components/UI";
 
-import "./DataPage-Google.css";
+import "./DataPage-Professional.css";
 
 const configs = {
   "retailer-orders": {
@@ -95,9 +95,9 @@ const configs = {
   },
 
   "wholesaler-orders": {
-    title: "Purchase orders",
+    title: "Orders",
     subtitle:
-      "Review, confirm, pack, dispatch, and deliver retailer grocery requirements.",
+      "Manage retailer orders through confirmation, packing, dispatch, and delivery.",
     eyebrow: "Wholesale fulfilment",
     url: "/wholesaler/orders",
     cols: [
@@ -426,6 +426,14 @@ const openRow = (row) => {
 
     case "wholesaler-payments":
       navigate(`/wholesaler/payments/${row.id}`);
+      break;
+
+    case "wholesaler-orders":
+      navigate(`/wholesaler/orders/${row.id}`);
+      break;
+
+    case "retailer-orders":
+      navigate(`/retailer/orders/${row.id}`);
       break;
 
     default:
@@ -803,6 +811,8 @@ className={
     "wholesaler-invoices",
     "wholesaler-payments",
     "wholesaler-deliveries",
+    "wholesaler-orders",
+    "retailer-orders",
   ].includes(type)
     ? "data-clickable-row"
     : ""
@@ -905,7 +915,9 @@ className={
     <article
   className={
     type === "wholesaler-retailers" ||
-    type === "wholesaler-invoices"
+    type === "wholesaler-invoices" ||
+    type === "wholesaler-orders" ||
+    type === "retailer-orders"
       ? "data-mobile-card data-clickable-row"
       : "data-mobile-card"
   }

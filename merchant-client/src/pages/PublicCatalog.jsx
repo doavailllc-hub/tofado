@@ -19,6 +19,7 @@ import {
 
 import api from "../services/api";
 import { Spinner } from "../components/UI";
+import "./PublicCatalog.css";
 
 const initialCustomer = {
   customer_name: "",

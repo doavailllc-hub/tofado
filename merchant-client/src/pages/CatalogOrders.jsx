@@ -25,7 +25,7 @@ import {
   Spinner,
   statusTone,
 } from "../components/UI";
-import "./OrdersV3.css";
+import "./CatalogOrders.css";
 
 const statuses = [
   "pending",
@@ -591,12 +591,24 @@ export default function CatalogOrders() {
         >
           <aside className="ov3-drawer">
             <header className="ov3-drawer-header">
-              <div>
-                <span>Order details</span>
-                <h2>
-                  {selectedOrder.order_no ||
-                    `CAT-${selectedOrder.id}`}
-                </h2>
+              <div className="ov3-modal-heading">
+                <div>
+                  <span>Order details</span>
+                  <h2>
+                    {selectedOrder.order_no ||
+                      `CAT-${selectedOrder.id}`}
+                  </h2>
+                </div>
+
+                <div className="ov3-modal-summary">
+                  <Badge tone={statusTone(selectedOrder.status)}>
+                    {selectedOrder.status}
+                  </Badge>
+
+                  <strong>
+                    SAR {money(selectedOrder.total_amount)}
+                  </strong>
+                </div>
               </div>
 
               <button

@@ -30,10 +30,7 @@ import {
 
 import api from "../services/api";
 import { Badge, Empty, Spinner } from "../components/UI";
-import "./ProductWizard-Fullscreen.css";
-import "./Catalog-Storefront-V2.css";
-import "./CatalogCoverSettings.css";
-import "./CatalogStorefrontManager.css";
+import "./Catalog.css";
 
 const PRODUCT_CATEGORIES = [
   "Rice & Grains",
@@ -825,14 +822,6 @@ const publicUrl = useMemo(() => {
         </div>
 
         <div className="catalog-heading-actions">
-          <button
-            type="button"
-            className="catalog-cover-button"
-            onClick={openCoverEditor}
-          >
-            <ImagePlus size={18} />
-            Customize storefront
-          </button>
 
           <button
             type="button"
@@ -945,7 +934,8 @@ const publicUrl = useMemo(() => {
           <span>Public catalog</span>
 
           <h2>
-            {catalog?.title ||
+            {catalog?.catalog_title ||
+              catalog?.title ||
               catalog?.business_name ||
               "Your wholesale product catalog"}
           </h2>

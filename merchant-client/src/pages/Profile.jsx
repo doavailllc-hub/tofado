@@ -21,7 +21,7 @@ import {
 import api from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { Spinner } from "../components/UI";
-import "./Profile-Google.css";
+import "./Profile.css";
 
 const BUSINESS_CATEGORIES = [
   "Grocery & Supermarket",
@@ -325,8 +325,17 @@ export default function Profile() {
           </p>
         </div>
 
-        <div className="business-profile-header-icon">
-          <Building2 size={29} />
+        <div className="business-profile-header-status">
+          <div className="business-profile-header-icon">
+            <Building2 size={29} />
+          </div>
+
+          <span>
+            <strong>Verified workspace</strong>
+            <small>Business information connected</small>
+          </span>
+
+          <CheckCircle2 size={20} />
         </div>
       </section>
 
@@ -630,6 +639,17 @@ export default function Profile() {
                 />
               </div>
             </label>
+
+            <div className="business-profile-section-divider full">
+              <div>
+                <Globe2 size={18} />
+              </div>
+
+              <span>
+                <strong>Public business details</strong>
+                <small>Information used across your storefront and documents.</small>
+              </span>
+            </div>
 
             <label className="business-profile-field full">
               <span>Website</span>

@@ -4112,4 +4112,90 @@ app.delete(
     }
   }
 );
+
+// ======================================================
+// SEND INVOICE TO RETAILER
+// POST /api/wholesaler/invoices/:id/send
+// ======================================================
+
+app.post(
+  "/api/wholesaler/invoices/:id/send",
+  auth,
+  allow("wholesaler"),
+  async (req, res, next) => {
+    try {
+      const invoiceId = Number(req.params.id);
+      const wholesalerId = Number(req.user.id);
+
+      if (!Number.isInteger(invoiceId) || invoiceId <= 0) {
+        return res.status(400).json({
+          message: "Invalid invoice ID.",
+        });
+      }
+
+      const [invoice] = await q(
+        `
+        SELECT
+          i.id,
+          i.invoice_no,
+          i.order_id,
+          i.retailer_id,
+          i.wholesaler_id,
+          i.total_amount,
+          i.paid_amount,
+          i.due_date,
+          i.status,
+          r.business_name AS retailer_business_name,
+          r.name AS retailer_name,
+          r.email AS retailer_email,
+          r.phone AS retailer_phone
+        FROM invoices i
+        LEFT JOIN users r
+          ON r.id = i.retailer_id
+        WHERE i.id = ?
+          AND i.wholesaler_id = ?
+        LIMIT 1
+        `,
+        [invoiceId, wholesalerId]
+      );
+
+      if (!invoice) {
+        return res.status(404).json({
+          message:
+            "Invoice not found or does not belong to your business.",
+        });
+      }
+
+      if (!invoice.retailer_email) {
+        return res.status(400).json({
+          message:
+            "The retailer does not have an email address.",
+        });
+      }
+
+      /*
+       * Add your email provider here.
+       *
+       * Example:
+       * await sendEmail({
+       *   to: invoice.retailer_email,
+       *   subject: `Invoice ${invoice.invoice_no}`,
+       *   html: invoiceEmailTemplate(invoice),
+       * });
+       */
+
+      return res.json({
+        message: "Invoice sent successfully.",
+        invoice: {
+          id: invoice.id,
+          invoice_no: invoice.invoice_no,
+          retailer_email: invoice.retailer_email,
+        },
+      });
+    } catch (error) {
+      console.error("SEND INVOICE ERROR:", error);
+      next(error);
+    }
+  }
+);
 app.listen(process.env.PORT || 5000, () => console.log(`Tofado API running on ${process.env.PORT || 5000}`));

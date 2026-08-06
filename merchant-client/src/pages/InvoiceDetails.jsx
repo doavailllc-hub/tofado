@@ -380,15 +380,22 @@ export default function InvoiceDetails() {
           </div>
 
           <div className="invoice-title-block">
-            <span>Tax Invoice</span>
+            <div className="invoice-title-kicker">
+              <ReceiptText size={15} />
+              <span>Tax Invoice</span>
+            </div>
             <h2>
               {invoice.invoice_no ||
                 `INV-${invoice.id || id}`}
             </h2>
 
-            <Badge tone={statusTone(invoice.status)}>
-              {readable(invoice.status || "unpaid")}
-            </Badge>
+            <div className="invoice-title-status-row">
+              <Badge tone={statusTone(invoice.status)}>
+                {readable(invoice.status || "unpaid")}
+              </Badge>
+
+              <strong>{formatMoney(summary.totalAmount)}</strong>
+            </div>
           </div>
         </section>
 

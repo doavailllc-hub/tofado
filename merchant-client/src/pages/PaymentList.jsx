@@ -128,7 +128,17 @@ export default function PaymentList() {
         <div className="payment-results-info">Showing <strong>{filtered.length}</strong> of <strong>{payments.length}</strong> payments</div>
 
         {filtered.length ? (
-          <div className="payment-card-list">
+          <>
+            <div className="payment-list-heading">
+              <div>
+                <strong>Payment activity</strong>
+                <span>Click a payment to open the complete receipt.</span>
+              </div>
+
+              <small>{filtered.length} records</small>
+            </div>
+
+            <div className="payment-card-list">
             {filtered.map(row => {
               const Icon = row.method === "cash" ? Banknote : row.method === "card" ? CreditCard : Wallet;
               return (
@@ -142,7 +152,8 @@ export default function PaymentList() {
                 </button>
               );
             })}
-          </div>
+            </div>
+          </>
         ) : <div className="payment-empty"><Empty/><h3>No payments found</h3><p>Recorded retailer payments will appear here.</p></div>}
       </section>
     </div>
