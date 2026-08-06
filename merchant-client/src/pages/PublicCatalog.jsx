@@ -63,30 +63,44 @@ export default function PublicCatalog() {
   useEffect(() => {
     let active = true;
 
-    async function loadCatalog() {
-      try {
-        setLoading(true);
-        setError("");
+   const loadCatalog = async () => {
+  try {
+    setLoading(true);
+    setError("");
 
-        const response = await api.get(`/public/catalog/${slug}`);
+    const response = await api.get(
+      `/public/catalog/${slug}`
+    );
 
-        if (!active) return;
+    const payload = response.data || {};
 
-        setCatalog(response.data?.catalog || response.data);
-        setProducts(response.data?.products || []);
-      } catch (requestError) {
-        if (!active) return;
+    setCatalog(
+      payload.catalog ||
+      payload
+    );
 
-        setError(
-          requestError.response?.data?.message ||
-            "This catalog is currently unavailable."
-        );
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
-      }
-    }
+    setProducts(
+      Array.isArray(payload.products)
+        ? payload.products
+        : []
+    );
+  } catch (requestError) {
+    console.error(
+      "LOAD PUBLIC CATALOG ERROR:",
+      requestError
+    );
+
+    setCatalog(null);
+    setProducts([]);
+
+    setError(
+      requestError.response?.data?.message ||
+      "This catalog is currently unavailable."
+    );
+  } finally {
+    setLoading(false);
+  }
+};
 
     loadCatalog();
 
