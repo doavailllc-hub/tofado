@@ -20,7 +20,7 @@ import {
 
 import { useAuth } from "../context/AuthContext";
 import logo from "../assets/tofado-logo.png";
-import "./Layout-Google.css";
+import "./Layout.css";
 
 const menus = {
   retailer: [
@@ -133,6 +133,8 @@ export default function Layout() {
     [user?.business_name, user?.name]
   );
 
+  const companyLogo = user?.logo_url || user?.business_logo_url || "";
+
   useEffect(() => {
     const activeGroup = items.find(
       (item) =>
@@ -175,8 +177,19 @@ export default function Layout() {
 
       <aside className={`tf-sidebar ${sidebarOpen ? "open" : ""}`} aria-label="Main navigation">
         <div className="tf-sidebar-brand">
-          <NavLink to={`/${user?.role}`} aria-label="Go to dashboard">
-            <img src={logo} alt="Tofado Merchant" />
+          <NavLink
+            to={`/${user?.role}`}
+            className="tf-brand-link"
+            aria-label="Go to dashboard"
+          >
+            <span className="tf-brand-logo-wrap">
+              <img src={logo} alt="Tofado Merchant" />
+            </span>
+
+            <span className="tf-brand-copy">
+              <strong>Tofado</strong>
+              <small>Merchant workspace</small>
+            </span>
           </NavLink>
           <button
             type="button"
@@ -189,7 +202,16 @@ export default function Layout() {
         </div>
 
         <div className="tf-business-card">
-          <div className="tf-business-avatar">{accountInitials}</div>
+          <div className="tf-business-avatar">
+            {companyLogo ? (
+              <img
+                src={companyLogo}
+                alt={user?.business_name || "Company logo"}
+              />
+            ) : (
+              accountInitials
+            )}
+          </div>
           <div className="tf-business-details">
             <strong>{user?.business_name || user?.name || "Tofado Merchant"}</strong>
             <span>{role.workspace}</span>
@@ -282,9 +304,15 @@ export default function Layout() {
             >
               <Menu size={20} />
             </button>
-            <div className="tf-topbar-heading">
-              <span>Tofado Merchant</span>
-              <strong>{role.workspace}</strong>
+            <div className="tf-topbar-brand">
+              <span className="tf-topbar-logo">
+                <img src={logo} alt="Tofado" />
+              </span>
+
+              <div className="tf-topbar-heading">
+                <span>Tofado Merchant</span>
+                <strong>{role.workspace}</strong>
+              </div>
             </div>
           </div>
 
@@ -306,7 +334,16 @@ export default function Layout() {
                 onClick={() => setProfileOpen((value) => !value)}
                 aria-expanded={profileOpen}
               >
-                <span className="tf-profile-avatar">{accountInitials}</span>
+                <span className="tf-profile-avatar">
+                  {companyLogo ? (
+                    <img
+                      src={companyLogo}
+                      alt={user?.business_name || "Company logo"}
+                    />
+                  ) : (
+                    accountInitials
+                  )}
+                </span>
                 <span className="tf-profile-details">
                   <strong>{user?.name || "Merchant User"}</strong>
                   <small>{role.label}</small>
