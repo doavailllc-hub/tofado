@@ -19,8 +19,6 @@ import {
 
 import api from "../services/api";
 import { Spinner } from "../components/UI";
-import "./Commerce-Google.css";
-import "./PublicStore-V2.css";
 
 const initialCustomer = {
   customer_name: "",
@@ -70,7 +68,7 @@ export default function PublicCatalog() {
         setLoading(true);
         setError("");
 
-    const response = await api.get(`/catalog/${slug}`);
+        const response = await api.get(`/public/catalog/${slug}`);
 
         if (!active) return;
 
@@ -340,7 +338,7 @@ export default function PublicCatalog() {
             {catalog.logo_url ? (
               <img
                 src={catalog.logo_url}
-                alt={catalog.title || catalog.business_name}
+                alt={catalog.catalog_title || catalog.title || catalog.business_name}
               />
             ) : (
               <Store size={25} />
@@ -351,7 +349,8 @@ export default function PublicCatalog() {
             <span>Wholesale catalog</span>
 
             <h1>
-              {catalog.title ||
+              {catalog.catalog_title ||
+                catalog.title ||
                 catalog.business_name ||
                 "Product Catalog"}
             </h1>
@@ -392,13 +391,16 @@ export default function PublicCatalog() {
             <span>Wholesale products</span>
 
             <h2>
-              {catalog.description ||
-                "Browse wholesale grocery products and order directly from this verified merchant."}
+              {catalog.catalog_title ||
+                catalog.title ||
+                `Shop wholesale products from ${
+                  catalog.business_name || "this verified merchant"
+                }.`}
             </h2>
 
             <p>
-              Choose products, place a direct order, or send an
-              enquiry for special pricing and availability.
+              {catalog.catalog_description ||
+                "Browse available products, place a direct order, or send an enquiry for pricing and availability."}
             </p>
 
             <div className="public-catalog-hero-actions">
@@ -426,10 +428,10 @@ export default function PublicCatalog() {
           </div>
 
           <div className="public-catalog-hero-visual">
-            {catalog.cover_url ? (
+            {catalog.cover_image_url ? (
               <img
-                src={catalog.cover_url}
-                alt={catalog.title || "Catalog cover"}
+                src={catalog.cover_image_url}
+                alt={catalog.catalog_title || catalog.title || "Catalog storefront"}
               />
             ) : (
               <div className="public-catalog-cover-placeholder">

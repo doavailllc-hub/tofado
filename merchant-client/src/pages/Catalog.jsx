@@ -22,6 +22,7 @@ import {
   Save,
   Search,
   Share2,
+  Store,
   Trash2,
   UploadCloud,
   X,
@@ -31,6 +32,8 @@ import api from "../services/api";
 import { Badge, Empty, Spinner } from "../components/UI";
 import "./ProductWizard-Fullscreen.css";
 import "./Catalog-Storefront-V2.css";
+import "./CatalogCoverSettings.css";
+import "./CatalogStorefrontManager.css";
 
 const PRODUCT_CATEGORIES = [
   "Rice & Grains",
@@ -109,6 +112,7 @@ function formatMoney(value) {
 
 export default function Catalog() {
   const imageInputRef = useRef(null);
+  const coverInputRef = useRef(null);
 
   const [products, setProducts] = useState(null);
   const [catalog, setCatalog] = useState(null);
@@ -119,6 +123,16 @@ export default function Catalog() {
   const [refreshing, setRefreshing] = useState(false);
   const [processingId, setProcessingId] = useState(null);
   const [error, setError] = useState("");
+
+  const [coverEditorOpen, setCoverEditorOpen] = useState(false);
+  const [coverForm, setCoverForm] = useState({
+    catalog_title: "",
+    catalog_description: "",
+    cover_image_url: "",
+  });
+  const [savingCoverSettings, setSavingCoverSettings] = useState(false);
+  const [uploadingCover, setUploadingCover] = useState(false);
+  const [removingCover, setRemovingCover] = useState(false);
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorStep, setEditorStep] = useState(1);
@@ -154,6 +168,34 @@ export default function Catalog() {
   }, []);
 
   useEffect(() => {
+    if (!coverEditorOpen) return undefined;
+
+    const closeOnEscape = (event) => {
+      if (
+        event.key === "Escape" &&
+        !savingCoverSettings &&
+        !uploadingCover &&
+        !removingCover
+      ) {
+        setCoverEditorOpen(false);
+      }
+    };
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", closeOnEscape);
+
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [
+    coverEditorOpen,
+    savingCoverSettings,
+    uploadingCover,
+    removingCover,
+  ]);
+
+  useEffect(() => {
     if (!editorOpen) return undefined;
 
     const closeOnEscape = (event) => {
@@ -175,15 +217,14 @@ export default function Catalog() {
     };
   }, [editorOpen, savingProduct, uploadingImage]);
 
-const publicUrl = useMemo(() => {
-  if (!catalog?.slug) return "";
+  const publicUrl = useMemo(() => {
+    if (catalog?.public_url) return catalog.public_url;
+    if (catalog?.slug) {
+      return `${window.location.origin}/catalog/${catalog.slug}`;
+    }
+    return "";
+  }, [catalog]);
 
-  const baseUrl =
-    import.meta.env.VITE_PUBLIC_CATALOG_URL ||
-    "https://merchant.tofado.com";
-
-  return `${baseUrl}/catalog/${catalog.slug}`;
-}, [catalog]);
   const categories = useMemo(() => {
     const values = new Set(PRODUCT_CATEGORIES);
 
@@ -244,6 +285,169 @@ const publicUrl = useMemo(() => {
       return matchesSearch && matchesStatus && matchesCategory;
     });
   }, [products, search, statusFilter, categoryFilter]);
+
+  const openCoverEditor = () => {
+    setError("");
+    setCoverForm({
+      catalog_title:
+        catalog?.catalog_title ||
+        catalog?.title ||
+        `${catalog?.business_name || "Wholesale"} Product Catalog`,
+      catalog_description: catalog?.catalog_description || "",
+      cover_image_url: catalog?.cover_image_url || "",
+    });
+    setCoverEditorOpen(true);
+  };
+
+  const closeCoverEditor = () => {
+    if (savingCoverSettings || uploadingCover || removingCover) return;
+    setCoverEditorOpen(false);
+    setError("");
+  };
+
+  const updateCoverField = (key, value) => {
+    setError("");
+    setCoverForm((current) => ({
+      ...current,
+      [key]: value,
+    }));
+  };
+
+  const uploadCoverImage = async (file) => {
+    if (!file) return;
+
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+
+    if (!allowedTypes.includes(file.type)) {
+      setError("Use a JPG, PNG, or WEBP cover image.");
+      return;
+    }
+
+    if (file.size > 6 * 1024 * 1024) {
+      setError("Cover image must be smaller than 6 MB.");
+      return;
+    }
+
+    try {
+      setUploadingCover(true);
+      setError("");
+
+      const formData = new FormData();
+      formData.append("image", file);
+
+      const response = await api.post(
+        "/wholesaler/catalog/cover-image",
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        }
+      );
+
+      const imageUrl = response.data.cover_image_url;
+
+      setCoverForm((current) => ({
+        ...current,
+        cover_image_url: imageUrl,
+      }));
+
+      setCatalog((current) => ({
+        ...current,
+        cover_image_url: imageUrl,
+      }));
+    } catch (requestError) {
+      setError(
+        requestError.response?.data?.message ||
+          "Unable to upload catalog cover image."
+      );
+    } finally {
+      setUploadingCover(false);
+      if (coverInputRef.current) {
+        coverInputRef.current.value = "";
+      }
+    }
+  };
+
+  const removeCoverImage = async () => {
+    if (!coverForm.cover_image_url) return;
+
+    try {
+      setRemovingCover(true);
+      setError("");
+
+      await api.delete("/wholesaler/catalog/cover-image");
+
+      setCoverForm((current) => ({
+        ...current,
+        cover_image_url: "",
+      }));
+
+      setCatalog((current) => ({
+        ...current,
+        cover_image_url: null,
+      }));
+    } catch (requestError) {
+      setError(
+        requestError.response?.data?.message ||
+          "Unable to remove catalog cover image."
+      );
+    } finally {
+      setRemovingCover(false);
+    }
+  };
+
+  const saveCoverSettings = async (event) => {
+    event.preventDefault();
+
+    const title = coverForm.catalog_title.trim();
+    const description = coverForm.catalog_description.trim();
+
+    if (!title) {
+      setError("Enter the catalog title.");
+      return;
+    }
+
+    if (title.length > 180) {
+      setError("Catalog title must be 180 characters or fewer.");
+      return;
+    }
+
+    if (description.length > 500) {
+      setError("Catalog description must be 500 characters or fewer.");
+      return;
+    }
+
+    try {
+      setSavingCoverSettings(true);
+      setError("");
+
+      const response = await api.put(
+        "/wholesaler/catalog/settings",
+        {
+          catalog_title: title,
+          catalog_description: description,
+        }
+      );
+
+      setCatalog((current) => ({
+        ...current,
+        ...(response.data.catalog || {}),
+        catalog_title: title,
+        catalog_description: description,
+        cover_image_url: coverForm.cover_image_url || null,
+      }));
+
+      setCoverEditorOpen(false);
+    } catch (requestError) {
+      setError(
+        requestError.response?.data?.message ||
+          "Unable to save storefront settings."
+      );
+    } finally {
+      setSavingCoverSettings(false);
+    }
+  };
 
   const openCreate = () => {
     setError("");
@@ -619,14 +823,25 @@ const publicUrl = useMemo(() => {
           </p>
         </div>
 
-        <button
-          type="button"
-          className="catalog-primary-button"
-          onClick={openCreate}
-        >
-          <Plus size={18} />
-          Add product
-        </button>
+        <div className="catalog-heading-actions">
+          <button
+            type="button"
+            className="catalog-cover-button"
+            onClick={openCoverEditor}
+          >
+            <ImagePlus size={18} />
+            Customize storefront
+          </button>
+
+          <button
+            type="button"
+            className="catalog-primary-button"
+            onClick={openCreate}
+          >
+            <Plus size={18} />
+            Add product
+          </button>
+        </div>
       </section>
 
       <section className="catalog-summary-grid">
@@ -649,6 +864,75 @@ const publicUrl = useMemo(() => {
           <span>Low stock</span>
           <strong>{stats.lowStock}</strong>
         </article>
+      </section>
+
+      <section className="catalog-storefront-manager">
+        <div className="catalog-storefront-preview">
+          <div
+            className={`catalog-storefront-thumbnail ${
+              catalog?.cover_image_url ? "has-image" : ""
+            }`}
+            style={
+              catalog?.cover_image_url
+                ? {
+                    backgroundImage: `linear-gradient(135deg, rgba(8, 20, 38, 0.76), rgba(8, 20, 38, 0.2)), url(${catalog.cover_image_url})`,
+                  }
+                : undefined
+            }
+          >
+            {!catalog?.cover_image_url && <Store size={26} />}
+          </div>
+
+          <div className="catalog-storefront-copy">
+            <span>Storefront appearance</span>
+
+            <h2>
+              {catalog?.catalog_title ||
+                catalog?.title ||
+                `${catalog?.business_name || "Wholesale"} Product Catalog`}
+            </h2>
+
+            <p>
+              {catalog?.catalog_description ||
+                "Customize the public store title, introduction, and cover image shown to your retail customers."}
+            </p>
+
+            <div className="catalog-storefront-status">
+              <span>
+                <Eye size={14} />
+                Public store published
+              </span>
+
+              <span>
+                <Package size={14} />
+                {stats.published} visible products
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="catalog-storefront-actions">
+          <button
+            type="button"
+            className="catalog-storefront-customize"
+            onClick={openCoverEditor}
+          >
+            <Edit3 size={17} />
+            Customize storefront
+          </button>
+
+          {publicUrl && (
+            <a
+              href={publicUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="catalog-storefront-preview-button"
+            >
+              <ExternalLink size={17} />
+              Preview store
+            </a>
+          )}
+        </div>
       </section>
 
       <section className="catalog-share-panel">
@@ -948,6 +1232,204 @@ const publicUrl = useMemo(() => {
           </div>
         )}
       </section>
+
+      {coverEditorOpen && (
+        <div className="catalog-cover-overlay">
+          <section
+            className="catalog-cover-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="catalog-cover-title"
+          >
+            <header className="catalog-cover-dialog-header">
+              <div>
+                <span>Public storefront</span>
+                <h2 id="catalog-cover-title">Customize public storefront</h2>
+                <p>
+                  Design the public store your retail customers will see.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                aria-label="Close catalog cover settings"
+                disabled={
+                  savingCoverSettings || uploadingCover || removingCover
+                }
+                onClick={closeCoverEditor}
+              >
+                <X size={20} />
+              </button>
+            </header>
+
+            <form
+              className="catalog-cover-dialog-body"
+              onSubmit={saveCoverSettings}
+            >
+              <div className="catalog-cover-upload-column">
+                <div
+                  className={`catalog-cover-image-preview ${
+                    coverForm.cover_image_url ? "has-image" : ""
+                  }`}
+                  style={
+                    coverForm.cover_image_url
+                      ? {
+                          backgroundImage: `linear-gradient(90deg, rgba(8, 20, 38, 0.72), rgba(8, 20, 38, 0.18)), url(${coverForm.cover_image_url})`,
+                        }
+                      : undefined
+                  }
+                >
+                  {!coverForm.cover_image_url && (
+                    <div>
+                      <ImagePlus size={38} />
+                      <strong>No cover image</strong>
+                      <span>Recommended size: 1600 × 600 px</span>
+                    </div>
+                  )}
+
+                  {coverForm.cover_image_url && (
+                    <div className="catalog-cover-preview-copy">
+                      <small>Wholesale catalog</small>
+                      <strong>
+                        {coverForm.catalog_title || "Catalog title"}
+                      </strong>
+                    </div>
+                  )}
+                </div>
+
+                <input
+                  ref={coverInputRef}
+                  type="file"
+                  hidden
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={(event) =>
+                    uploadCoverImage(event.target.files?.[0])
+                  }
+                />
+
+                <div className="catalog-cover-image-actions">
+                  <button
+                    type="button"
+                    disabled={uploadingCover || removingCover}
+                    onClick={() => coverInputRef.current?.click()}
+                  >
+                    {uploadingCover ? (
+                      <>
+                        <LoaderCircle size={17} className="catalog-spin" />
+                        Uploading...
+                      </>
+                    ) : (
+                      <>
+                        <UploadCloud size={17} />
+                        {coverForm.cover_image_url
+                          ? "Change image"
+                          : "Upload cover"}
+                      </>
+                    )}
+                  </button>
+
+                  {coverForm.cover_image_url && (
+                    <button
+                      type="button"
+                      className="danger"
+                      disabled={uploadingCover || removingCover}
+                      onClick={removeCoverImage}
+                    >
+                      {removingCover ? (
+                        <LoaderCircle size={17} className="catalog-spin" />
+                      ) : (
+                        <Trash2 size={17} />
+                      )}
+                      Remove
+                    </button>
+                  )}
+                </div>
+
+                <small className="catalog-cover-upload-help">
+                  JPG, PNG, or WEBP. Maximum 6 MB. Use a wide landscape image.
+                </small>
+              </div>
+
+              <div className="catalog-cover-fields">
+                <label>
+                  <span>Catalog title *</span>
+                  <input
+                    autoFocus
+                    required
+                    maxLength={180}
+                    value={coverForm.catalog_title}
+                    placeholder="Nasa Marketing Wholesale Catalog"
+                    onChange={(event) =>
+                      updateCoverField(
+                        "catalog_title",
+                        event.target.value
+                      )
+                    }
+                  />
+                  <small>
+                    {coverForm.catalog_title.length}/180 characters
+                  </small>
+                </label>
+
+                <label>
+                  <span>Catalog description</span>
+                  <textarea
+                    rows={7}
+                    maxLength={500}
+                    value={coverForm.catalog_description}
+                    placeholder="Introduce your business, product range, delivery area, or wholesale benefits."
+                    onChange={(event) =>
+                      updateCoverField(
+                        "catalog_description",
+                        event.target.value
+                      )
+                    }
+                  />
+                  <small>
+                    {coverForm.catalog_description.length}/500 characters
+                  </small>
+                </label>
+
+                {error && (
+                  <div className="catalog-alert error">{error}</div>
+                )}
+              </div>
+
+              <footer className="catalog-cover-dialog-footer">
+                <button
+                  type="button"
+                  disabled={
+                    savingCoverSettings || uploadingCover || removingCover
+                  }
+                  onClick={closeCoverEditor}
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  className="primary"
+                  disabled={
+                    savingCoverSettings || uploadingCover || removingCover
+                  }
+                >
+                  {savingCoverSettings ? (
+                    <>
+                      <LoaderCircle size={17} className="catalog-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save size={17} />
+                      Save storefront
+                    </>
+                  )}
+                </button>
+              </footer>
+            </form>
+          </section>
+        </div>
+      )}
 
       {editorOpen && (
         <div className="product-wizard-overlay">

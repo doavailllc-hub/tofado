@@ -483,26 +483,36 @@ function createCatalogSlug(value, userId) {
 
   return `${slug || "catalog"}-${userId}`;
 }
-
 async function getOrCreateWholesaleCatalog(wholesalerId) {
   const [existingCatalog] = await q(
-    `SELECT
-       c.id,
-       c.wholesaler_id,
-       c.slug,
-       c.title,
-       c.is_published,
-       c.created_at,
-       c.updated_at,
-       u.business_name,
-       u.logo_url,
-       u.phone,
-       u.location
-     FROM wholesale_catalogs c
-     INNER JOIN users u
-       ON u.id = c.wholesaler_id
-     WHERE c.wholesaler_id = ?
-     LIMIT 1`,
+    `
+    SELECT
+      c.id,
+      c.wholesaler_id,
+      c.slug,
+      c.title,
+      c.catalog_title,
+      c.catalog_description,
+      c.cover_image_url,
+      c.cover_updated_at,
+      c.is_published,
+      c.created_at,
+      c.updated_at,
+
+      u.business_name,
+      u.logo_url,
+      u.phone,
+      u.location
+
+    FROM wholesale_catalogs c
+
+    INNER JOIN users u
+      ON u.id = c.wholesaler_id
+
+    WHERE c.wholesaler_id = ?
+
+    LIMIT 1
+    `,
     [wholesalerId]
   );
 
@@ -511,16 +521,21 @@ async function getOrCreateWholesaleCatalog(wholesalerId) {
   }
 
   const [wholesaler] = await q(
-    `SELECT
-       id,
-       business_name,
-       logo_url,
-       phone,
-       location
-     FROM users
-     WHERE id = ?
-       AND role = 'wholesaler'
-     LIMIT 1`,
+    `
+    SELECT
+      id,
+      business_name,
+      logo_url,
+      phone,
+      location
+
+    FROM users
+
+    WHERE id = ?
+      AND role = 'wholesaler'
+
+    LIMIT 1
+    `,
     [wholesalerId]
   );
 
@@ -533,45 +548,65 @@ async function getOrCreateWholesaleCatalog(wholesalerId) {
     wholesaler.id
   );
 
-  const title = `${wholesaler.business_name} Product Catalog`;
+  const title =
+    `${wholesaler.business_name} Product Catalog`;
 
   await q(
-    `INSERT INTO wholesale_catalogs
-      (
-        wholesaler_id,
-        slug,
-        title,
-        is_published
-      )
-     VALUES (?, ?, ?, 1)`,
-    [wholesaler.id, slug, title]
+    `
+    INSERT INTO wholesale_catalogs (
+      wholesaler_id,
+      slug,
+      title,
+      catalog_title,
+      catalog_description,
+      cover_image_url,
+      is_published
+    )
+    VALUES (?, ?, ?, ?, NULL, NULL, 1)
+    `,
+    [
+      wholesaler.id,
+      slug,
+      title,
+      title,
+    ]
   );
 
   const [createdCatalog] = await q(
-    `SELECT
-       c.id,
-       c.wholesaler_id,
-       c.slug,
-       c.title,
-       c.is_published,
-       c.created_at,
-       c.updated_at,
-       u.business_name,
-       u.logo_url,
-       u.phone,
-       u.location
-     FROM wholesale_catalogs c
-     INNER JOIN users u
-       ON u.id = c.wholesaler_id
-     WHERE c.wholesaler_id = ?
-     LIMIT 1`,
+    `
+    SELECT
+      c.id,
+      c.wholesaler_id,
+      c.slug,
+      c.title,
+      c.catalog_title,
+      c.catalog_description,
+      c.cover_image_url,
+      c.cover_updated_at,
+      c.is_published,
+      c.created_at,
+      c.updated_at,
+
+      u.business_name,
+      u.logo_url,
+      u.phone,
+      u.location
+
+    FROM wholesale_catalogs c
+
+    INNER JOIN users u
+      ON u.id = c.wholesaler_id
+
+    WHERE c.wholesaler_id = ?
+
+    LIMIT 1
+    `,
     [wholesalerId]
   );
 
   return createdCatalog;
 }
 
-// Get current wholesaler public catalog information
 app.get(
   "/api/wholesaler/catalog",
   auth,
@@ -582,20 +617,37 @@ app.get(
         await getOrCreateWholesaleCatalog(req.user.id);
 
       const frontendUrl =
+        process.env.PUBLIC_CATALOG_URL ||
         process.env.CLIENT_URL?.split(",")[0] ||
         "http://localhost:5173";
 
       return res.json({
         ...catalog,
 
-        public_url: `${frontendUrl}/catalog/${catalog.slug}`,
+        catalog_title:
+          catalog.catalog_title ||
+          catalog.title ||
+          `${catalog.business_name} Product Catalog`,
+
+        catalog_description:
+          catalog.catalog_description || "",
+
+        cover_image_url:
+          catalog.cover_image_url || null,
+
+        public_url:
+          `${frontendUrl.replace(/\/+$/, "")}/catalog/${catalog.slug}`,
       });
     } catch (error) {
+      console.error(
+        "LOAD WHOLESALER CATALOG ERROR:",
+        error
+      );
+
       next(error);
     }
   }
 );
-
 // Get products belonging to the logged-in wholesaler
 app.get(
   "/api/wholesaler/catalog/products",
@@ -977,7 +1029,97 @@ app.put(
     }
   }
 );
+// ======================================================
+// UPDATE PRODUCT PUBLISH STATUS
+// PATCH /api/wholesaler/catalog/products/:id/status
+// ======================================================
 
+app.patch(
+  "/api/wholesaler/catalog/products/:id/status",
+  auth,
+  allow("wholesaler"),
+  async (req, res, next) => {
+    try {
+      const productId = Number(req.params.id);
+      const wholesalerId = Number(req.user.id);
+      const { is_active } = req.body || {};
+
+      if (!Number.isInteger(productId) || productId <= 0) {
+        return res.status(400).json({
+          message: "Invalid product ID.",
+        });
+      }
+
+      if (typeof is_active !== "boolean") {
+        return res.status(400).json({
+          message: "Product status must be true or false.",
+        });
+      }
+
+      const result = await q(
+        `
+        UPDATE wholesale_products
+        SET
+          is_active = ?,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+          AND wholesaler_id = ?
+        `,
+        [
+          is_active ? 1 : 0,
+          productId,
+          wholesalerId,
+        ]
+      );
+
+      if (!result.affectedRows) {
+        return res.status(404).json({
+          message:
+            "Product not found or it does not belong to your business.",
+        });
+      }
+
+      const [product] = await q(
+        `
+        SELECT
+          id,
+          wholesaler_id,
+          name,
+          sku,
+          brand,
+          category_name,
+          description,
+          image_url,
+          image_key,
+          unit,
+          pack_size,
+          minimum_order,
+          price,
+          compare_price,
+          stock_quantity,
+          low_stock_level,
+          is_active,
+          created_at,
+          updated_at
+        FROM wholesale_products
+        WHERE id = ?
+          AND wholesaler_id = ?
+        LIMIT 1
+        `,
+        [productId, wholesalerId]
+      );
+
+      return res.json(product);
+    } catch (error) {
+      console.error(
+        "UPDATE PRODUCT STATUS ERROR:",
+        error
+      );
+
+      next(error);
+    }
+  }
+);
 // Delete product
 app.delete(
   "/api/wholesaler/catalog/products/:id",
@@ -3560,5 +3702,280 @@ app.post(
     }
   }
 );
+// ======================================================
+// UPLOAD CATALOG COVER IMAGE
+// POST /api/wholesaler/catalog/cover-image
+// ======================================================
+// ======================================================
+// UPLOAD CATALOG COVER IMAGE
+// POST /api/wholesaler/catalog/cover-image
+// ======================================================
 
+app.post(
+  "/api/wholesaler/catalog/cover-image",
+  auth,
+  allow("wholesaler"),
+  productImageUpload.single("image"),
+  async (req, res) => {
+    try {
+      const wholesalerId = Number(req.user.id);
+
+      if (!req.file) {
+        return res.status(400).json({
+          message: "Select a catalog cover image.",
+        });
+      }
+
+      if (!process.env.S3_BUCKET) {
+        return res.status(500).json({
+          message:
+            "S3_BUCKET is not configured on the server.",
+        });
+      }
+
+      const extensions = {
+        "image/jpeg": ".jpg",
+        "image/png": ".png",
+        "image/webp": ".webp",
+      };
+
+      const extension =
+        extensions[req.file.mimetype] || ".jpg";
+
+      const imageKey = [
+        "merchant-products",
+        String(wholesalerId),
+        "catalog-covers",
+        `${crypto.randomUUID()}${extension}`,
+      ].join("/");
+
+      await s3.send(
+        new PutObjectCommand({
+          Bucket: process.env.S3_BUCKET,
+          Key: imageKey,
+          Body: req.file.buffer,
+          ContentType: req.file.mimetype,
+          CacheControl:
+            "public, max-age=31536000, immutable",
+        })
+      );
+
+      const imageUrl = getPublicS3Url(imageKey);
+
+      const [catalog] = await q(
+        `
+        SELECT
+          id,
+          cover_image_url
+        FROM wholesale_catalogs
+        WHERE wholesaler_id = ?
+        LIMIT 1
+        `,
+        [wholesalerId]
+      );
+
+      if (!catalog) {
+        return res.status(404).json({
+          message: "Catalog not found.",
+        });
+      }
+
+      const result = await q(
+        `
+        UPDATE wholesale_catalogs
+        SET
+          cover_image_url = ?,
+          cover_updated_at = CURRENT_TIMESTAMP,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE wholesaler_id = ?
+        `,
+        [imageUrl, wholesalerId]
+      );
+
+      if (!result.affectedRows) {
+        return res.status(404).json({
+          message: "Catalog not found.",
+        });
+      }
+
+      return res.status(201).json({
+        message:
+          "Catalog cover uploaded successfully.",
+        cover_image_url: imageUrl,
+        cover_image_key: imageKey,
+      });
+    } catch (error) {
+      console.error(
+        "CATALOG COVER UPLOAD ERROR:",
+        {
+          name: error?.name,
+          message: error?.message,
+          code: error?.Code || error?.code,
+          status:
+            error?.$metadata?.httpStatusCode,
+          resource: error?.Resource,
+          stack: error?.stack,
+        }
+      );
+
+      return res
+        .status(
+          error?.$metadata?.httpStatusCode || 500
+        )
+        .json({
+          message:
+            error?.message ||
+            "Unable to upload catalog cover image.",
+        });
+    }
+  }
+);
+// ======================================================
+// UPDATE CATALOG COVER SETTINGS
+// PUT /api/wholesaler/catalog/settings
+// ======================================================
+
+app.put(
+  "/api/wholesaler/catalog/settings",
+  auth,
+  allow("wholesaler"),
+  async (req, res, next) => {
+    try {
+      const wholesalerId = Number(req.user.id);
+
+      const {
+        catalog_title,
+        catalog_description,
+      } = req.body || {};
+
+      const cleanTitle = String(
+        catalog_title || ""
+      ).trim();
+
+      const cleanDescription = String(
+        catalog_description || ""
+      ).trim();
+
+      if (cleanTitle.length > 180) {
+        return res.status(400).json({
+          message:
+            "Catalog title must be 180 characters or fewer.",
+        });
+      }
+
+      if (cleanDescription.length > 500) {
+        return res.status(400).json({
+          message:
+            "Catalog description must be 500 characters or fewer.",
+        });
+      }
+
+      const result = await q(
+        `
+        UPDATE catalogs
+        SET
+          catalog_title = ?,
+          catalog_description = ?,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE wholesaler_id = ?
+        `,
+        [
+          cleanTitle || null,
+          cleanDescription || null,
+          wholesalerId,
+        ]
+      );
+
+      if (!result.affectedRows) {
+        return res.status(404).json({
+          message: "Catalog not found.",
+        });
+      }
+
+      const catalogs = await q(
+        `
+        SELECT
+          id,
+          slug,
+          catalog_title,
+          catalog_description,
+          cover_image_url,
+          cover_updated_at
+        FROM catalogs
+        WHERE wholesaler_id = ?
+        LIMIT 1
+        `,
+        [wholesalerId]
+      );
+
+      return res.json({
+        message: "Catalog settings updated successfully.",
+        catalog: catalogs[0],
+      });
+    } catch (error) {
+      console.error(
+        "UPDATE CATALOG SETTINGS ERROR:",
+        error
+      );
+
+      next(error);
+    }
+  }
+);
+// ======================================================
+// REMOVE CATALOG COVER IMAGE
+// DELETE /api/wholesaler/catalog/cover-image
+// ======================================================
+
+app.delete(
+  "/api/wholesaler/catalog/cover-image",
+  auth,
+  allow("wholesaler"),
+  async (req, res, next) => {
+    try {
+      const wholesalerId = Number(req.user.id);
+
+      const catalogs = await q(
+        `
+        SELECT
+          id,
+          cover_image_url
+        FROM catalogs
+        WHERE wholesaler_id = ?
+        LIMIT 1
+        `,
+        [wholesalerId]
+      );
+
+      if (!catalogs.length) {
+        return res.status(404).json({
+          message: "Catalog not found.",
+        });
+      }
+
+      await q(
+        `
+        UPDATE catalogs
+        SET
+          cover_image_url = NULL,
+          cover_updated_at = CURRENT_TIMESTAMP
+        WHERE wholesaler_id = ?
+        `,
+        [wholesalerId]
+      );
+
+      return res.json({
+        message: "Catalog cover removed successfully.",
+        cover_image_url: null,
+      });
+    } catch (error) {
+      console.error(
+        "REMOVE CATALOG COVER ERROR:",
+        error
+      );
+
+      next(error);
+    }
+  }
+);
 app.listen(process.env.PORT || 5000, () => console.log(`Tofado API running on ${process.env.PORT || 5000}`));
