@@ -150,7 +150,12 @@ export default function Catalog() {
       ]);
 
       setProducts(productsResponse.data || []);
-      setCatalog(catalogResponse.data || null);
+    setCatalog({
+  catalog_title: "",
+  catalog_description: "",
+  cover_image_url: "",
+  ...(catalogResponse.data || {}),
+});
     } catch (requestError) {
       setError(
         requestError.response?.data?.message ||
@@ -383,8 +388,8 @@ const publicUrl = useMemo(() => {
         cover_image_url: "",
       }));
 
-      setCatalog((current) => ({
-        ...current,
+     setCatalog(current => ({
+  ...current,
         cover_image_url: null,
       }));
     } catch (requestError) {
@@ -1398,7 +1403,7 @@ const publicUrl = useMemo(() => {
                     }
                   />
                   <small>
-                    {coverForm.catalog_title.length}/180 characters
+                  {(coverForm.catalog_title || "").length}/180 characters
                   </small>
                 </label>
 
@@ -1417,7 +1422,7 @@ const publicUrl = useMemo(() => {
                     }
                   />
                   <small>
-                    {coverForm.catalog_description.length}/500 characters
+               {(coverForm.catalog_description || "").length}/500 characters
                   </small>
                 </label>
 
@@ -1876,7 +1881,7 @@ const publicUrl = useMemo(() => {
                             }
                           />
                           <small>
-                            {productForm.description.length}/1000 characters
+                           {(productForm.description || "").length}/1000 characters
                           </small>
                         </label>
                       </div>
