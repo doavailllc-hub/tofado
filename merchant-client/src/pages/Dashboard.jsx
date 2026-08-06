@@ -9,6 +9,7 @@ import {
   PackageCheck,
   Plus,
   ReceiptText,
+  RefreshCw,
   ShoppingCart,
   Store,
   Truck,
@@ -20,6 +21,7 @@ import api from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { Badge, Spinner, statusTone } from "../components/UI";
 import "./Dashboard-Google.css";
+import "./Dashboard-Colorful-Live.css";
 
 const roleContent = {
   admin: {
@@ -188,6 +190,8 @@ export default function Dashboard() {
   const { user } = useAuth();
   const [dashboard, setDashboard] = useState(null);
   const [error, setError] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState(null);
 
   const role = user?.role || "admin";
   const content = roleContent[role] || roleContent.admin;
@@ -203,6 +207,7 @@ export default function Dashboard() {
 
         if (active) {
           setDashboard(response.data || { stats: {}, recent: [] });
+          setLastUpdated(new Date());
         }
       } catch (requestError) {
         if (active) {
@@ -293,6 +298,29 @@ export default function Dashboard() {
 
           <CheckCircle2 className="dashboard-account-check" size={20} />
         </div>
+
+        <button
+          type="button"
+          className="dashboard-live-refresh"
+          disabled={refreshing}
+          onClick={() => {
+            setRefreshing(true);
+            window.location.reload();
+          }}
+        >
+          <RefreshCw
+            size={17}
+            className={refreshing ? "dashboard-spin" : ""}
+          />
+          <span>
+            <strong>{refreshing ? "Refreshing..." : "Live database"}</strong>
+            <small>
+              {lastUpdated
+                ? `Updated ${formatDate(lastUpdated)}`
+                : "Connected"}
+            </small>
+          </span>
+        </button>
       </section>
 
       <section className="dashboard-stats-grid">
@@ -302,7 +330,7 @@ export default function Dashboard() {
             [ShoppingCart, Clock3, FileText, Wallet, Users, Truck][index % 6];
 
           return (
-            <article className="dashboard-stat-card" key={key}>
+            <article className={`dashboard-stat-card dashboard-stat-${index % 4}`} key={key}>
               <div className="dashboard-stat-icon">
                 <Icon size={19} />
               </div>
@@ -312,7 +340,7 @@ export default function Dashboard() {
                 <strong className="dashboard-stat-value">
                   {formatStatValue(key, value)}
                 </strong>
-                <small>Live data</small>
+                <small>Live database data</small>
               </div>
             </article>
           );
