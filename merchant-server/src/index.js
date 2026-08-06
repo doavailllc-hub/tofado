@@ -1171,6 +1171,123 @@ app.delete(
     }
   }
 );
+// ======================================================
+// PUBLIC CATALOG STOREFRONT
+// GET /api/public/catalog/:slug
+// ======================================================
+
+app.get(
+  "/api/public/catalog/:slug",
+  async (req, res, next) => {
+    try {
+      const slug = String(req.params.slug || "").trim();
+
+      if (!slug) {
+        return res.status(400).json({
+          message: "Catalog slug is required.",
+        });
+      }
+
+      const [catalog] = await q(
+        `
+        SELECT
+          c.id,
+          c.wholesaler_id,
+          c.slug,
+          c.title,
+          c.catalog_title,
+          c.catalog_description,
+          c.cover_image_url,
+          c.is_published,
+          c.created_at,
+          c.updated_at,
+
+          u.business_name,
+          u.logo_url,
+          u.phone,
+          u.location,
+          u.address
+
+        FROM wholesale_catalogs c
+
+        INNER JOIN users u
+          ON u.id = c.wholesaler_id
+          AND u.role = 'wholesaler'
+
+        WHERE c.slug = ?
+          AND c.is_published = 1
+
+        LIMIT 1
+        `,
+        [slug]
+      );
+
+      if (!catalog) {
+        return res.status(404).json({
+          message: "This catalog is currently unavailable.",
+        });
+      }
+
+      const products = await q(
+        `
+        SELECT
+          id,
+          wholesaler_id,
+          name,
+          sku,
+          brand,
+          category_name,
+          description,
+          image_url,
+          unit,
+          pack_size,
+          minimum_order,
+          price,
+          compare_price,
+          stock_quantity,
+          low_stock_level,
+          is_active,
+          created_at,
+          updated_at
+
+        FROM wholesale_products
+
+        WHERE wholesaler_id = ?
+          AND is_active = 1
+
+        ORDER BY id DESC
+        `,
+        [catalog.wholesaler_id]
+      );
+
+      return res.json({
+        catalog: {
+          ...catalog,
+
+          catalog_title:
+            catalog.catalog_title ||
+            catalog.title ||
+            `${catalog.business_name} Product Catalog`,
+
+          catalog_description:
+            catalog.catalog_description || "",
+
+          cover_image_url:
+            catalog.cover_image_url || null,
+        },
+
+        products,
+      });
+    } catch (error) {
+      console.error(
+        "LOAD PUBLIC CATALOG ERROR:",
+        error
+      );
+
+      next(error);
+    }
+  }
+);
 // Public catalog storefront
 app.get(
   "/api/catalog/:slug",
