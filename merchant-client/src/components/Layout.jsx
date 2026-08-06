@@ -182,15 +182,13 @@ export default function Layout() {
             className="tf-brand-link"
             aria-label="Go to dashboard"
           >
-            <span className="tf-brand-logo-wrap">
-              <img src={logo} alt="Tofado Merchant" />
-            </span>
-
-            <span className="tf-brand-copy">
-              <strong>Tofado</strong>
-              <small>Merchant workspace</small>
-            </span>
+            <img
+              className="tf-brand-logo"
+              src={logo}
+              alt="Tofado Merchant"
+            />
           </NavLink>
+
           <button
             type="button"
             className="tf-icon-button tf-sidebar-close"
@@ -310,7 +308,6 @@ export default function Layout() {
               </span>
 
               <div className="tf-topbar-heading">
-                <span>Tofado Merchant</span>
                 <strong>{role.workspace}</strong>
               </div>
             </div>

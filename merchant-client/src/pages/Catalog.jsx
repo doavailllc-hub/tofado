@@ -92,6 +92,15 @@ function normalizeProduct(product = {}) {
     ...EMPTY_PRODUCT,
     ...product,
     id: product.id ?? product.product_id ?? null,
+    name: product.name ?? "",
+    sku: product.sku ?? "",
+    brand: product.brand ?? "",
+    category_name: product.category_name ?? "",
+    description: product.description ?? "",
+    image_url: product.image_url ?? "",
+    image_key: product.image_key ?? "",
+    unit: product.unit ?? "piece",
+    pack_size: product.pack_size ?? "",
     price_mode: product.price_mode === "quote" ? "quote" : "fixed",
     price: product.price ?? "",
     compare_price: product.compare_price ?? "",
@@ -150,12 +159,7 @@ export default function Catalog() {
       ]);
 
       setProducts(productsResponse.data || []);
-    setCatalog({
-  catalog_title: "",
-  catalog_description: "",
-  cover_image_url: "",
-  ...(catalogResponse.data || {}),
-});
+      setCatalog(catalogResponse.data || null);
     } catch (requestError) {
       setError(
         requestError.response?.data?.message ||
@@ -388,8 +392,8 @@ const publicUrl = useMemo(() => {
         cover_image_url: "",
       }));
 
-     setCatalog(current => ({
-  ...current,
+      setCatalog((current) => ({
+        ...current,
         cover_image_url: null,
       }));
     } catch (requestError) {
@@ -602,8 +606,12 @@ const publicUrl = useMemo(() => {
     return true;
   };
 
-  const nextEditorStep = () => {
+  const nextEditorStep = (event) => {
+    event?.preventDefault();
+    event?.stopPropagation();
+
     if (!validateEditorStep(editorStep)) return;
+
     setEditorStep((current) => Math.min(current + 1, 4));
   };
 
@@ -614,8 +622,14 @@ const publicUrl = useMemo(() => {
 
   const saveProduct = async (event) => {
     event.preventDefault();
+    event.stopPropagation();
 
-    if (!productForm.name.trim()) {
+    if (editorStep < 4) {
+      nextEditorStep(event);
+      return;
+    }
+
+    if (!String(productForm.name || "").trim()) {
       setError("Product name is required.");
       return;
     }
@@ -643,15 +657,15 @@ const publicUrl = useMemo(() => {
       setError("");
 
       const payload = {
-        name: productForm.name.trim(),
-        sku: productForm.sku.trim() || null,
-        brand: productForm.brand.trim() || null,
+        name: String(productForm.name || "").trim(),
+        sku: String(productForm.sku || "").trim() || null,
+        brand: String(productForm.brand || "").trim() || null,
         category_name: productForm.category_name,
-        description: productForm.description.trim() || null,
+        description: String(productForm.description || "").trim() || null,
         image_url: productForm.image_url || null,
         image_key: productForm.image_key || null,
         unit: productForm.unit,
-        pack_size: productForm.pack_size.trim() || null,
+        pack_size: String(productForm.pack_size || "").trim() || null,
         minimum_order: Number(productForm.minimum_order || 1),
         price_mode: productForm.price_mode,
         price:
@@ -1403,7 +1417,7 @@ const publicUrl = useMemo(() => {
                     }
                   />
                   <small>
-                  {(coverForm.catalog_title || "").length}/180 characters
+                    {String(coverForm.catalog_title || "").length}/180 characters
                   </small>
                 </label>
 
@@ -1422,7 +1436,7 @@ const publicUrl = useMemo(() => {
                     }
                   />
                   <small>
-               {(coverForm.catalog_description || "").length}/500 characters
+                    {String(coverForm.catalog_description || "").length}/500 characters
                   </small>
                 </label>
 
@@ -1881,7 +1895,7 @@ const publicUrl = useMemo(() => {
                             }
                           />
                           <small>
-                           {(productForm.description || "").length}/1000 characters
+                            {String(productForm.description || "").length}/1000 characters
                           </small>
                         </label>
                       </div>
