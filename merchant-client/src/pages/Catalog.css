@@ -1,5 +1,5 @@
 :root{
-  --cat-blue:#2563eb;--cat-blue-dark:#1d4ed8;--cat-blue-soft:#eff6ff;
+  --cat-blue:#2563eb;--cat-blue-dark:#4f46e5;--cat-blue-soft:#eff6ff;
   --cat-green:#16a34a;--cat-green-soft:#ecfdf3;
   --cat-orange:#f59e0b;--cat-orange-soft:#fff7e6;
   --cat-purple:#7c3aed;--cat-purple-soft:#f5f3ff;
@@ -331,7 +331,7 @@
 }
 
 .merchant-product-price strong {
-  color: #1d4ed8;
+  color: #4f46e5;
   font-size: 17px;
   line-height: 1.25;
 }
@@ -397,7 +397,7 @@
 
 .merchant-product-actions button:first-child {
   border-color: #bfdbfe;
-  color: #1d4ed8;
+  color: #4f46e5;
   background: #eff6ff;
 }
 

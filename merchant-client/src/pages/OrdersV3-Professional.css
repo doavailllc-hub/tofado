@@ -765,6 +765,6 @@
 .ov3-customer-grid article,.ov3-section{border-radius:14px;background:#fff;box-shadow:0 2px 9px rgba(15,23,42,.035)}
 .ov3-progress{margin:22px 0}.ov3-progress span{width:32px;height:32px}.ov3-progress>div:after{top:15px;height:3px;border-radius:999px}
 .ov3-form-grid select,.ov3-form-grid input,.ov3-form-grid textarea{border-radius:10px}
-.ov3-confirm-box button,.ov3-primary{border-radius:10px;font-weight:800;background:linear-gradient(135deg,#2563eb,#1d4ed8)}
+.ov3-confirm-box button,.ov3-primary{border-radius:10px;font-weight:800;background:linear-gradient(135deg,#2563eb,#4f46e5)}
 @media(max-width:1000px){.ov3-customer-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:700px){.ov3-page{padding:18px 14px 34px}.ov3-backdrop{align-items:end!important;padding:0}.ov3-drawer{width:100%!important;max-height:94vh!important;border-radius:20px 20px 0 0!important}.ov3-customer-grid{grid-template-columns:1fr}}

@@ -50,7 +50,7 @@ export default function BrowserMockup() {
               <article><Store size={18} /><span><small>Total orders</small><strong>248</strong></span></article>
               <article><PackageCheck size={18} /><span><small>In progress</small><strong>36</strong></span></article>
               <article><Truck size={18} /><span><small>Delivered</small><strong>192</strong></span></article>
-              <article><CreditCard size={18} /><span><small>Order value</small><strong>SAR 184K</strong></span></article>
+              <article><CreditCard size={18} /><span><small>Order value</small><strong>INR 184K</strong></span></article>
             </div>
 
             <div className="preview-table">

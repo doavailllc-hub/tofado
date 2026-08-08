@@ -4,6 +4,8 @@ import {
   ArrowRight,
   Building2,
   CheckCircle2,
+  KeyRound,
+  Sparkles,
   Eye,
   EyeOff,
   LoaderCircle,
@@ -104,17 +106,24 @@ export default function Login() {
 
         <div className="google-login-header-links">
           <span>Verified B2B marketplace</span>
-          <Link to="/apply">Request access</Link>
+          <Link to="/register" className="google-header-create">
+            Create account
+            <ArrowRight size={14} />
+          </Link>
         </div>
       </header>
 
       <main className="google-login-main">
         <section className="google-login-intro">
           <span className="google-login-eyebrow">
+            <Sparkles size={14} />
             Tofado Merchant
           </span>
 
-          <h1>One workspace for modern grocery commerce.</h1>
+          <h1>
+            Business commerce,
+            <span className="google-login-title-accent"> simplified.</span>
+          </h1>
 
           <p>
             Connect verified retailers and wholesalers, manage procurement,
@@ -151,8 +160,8 @@ export default function Login() {
         <section className="google-login-card">
           <div className="google-login-heading">
             <span>Welcome back</span>
-            <h2>Sign in to your account</h2>
-            <p>Use your Tofado Merchant email and password.</p>
+            <h2>Sign in to Tofado</h2>
+            <p>Access your merchant workspace securely.</p>
           </div>
 
           <form className="google-login-form" onSubmit={submit}>
@@ -213,6 +222,18 @@ export default function Login() {
               </div>
             </label>
 
+            <div className="google-login-options">
+              <label className="google-remember">
+                <input type="checkbox" />
+                <span>Remember me</span>
+              </label>
+
+              <Link to="/forgot-password" className="google-forgot-link">
+                <KeyRound size={14} />
+                Forgot password?
+              </Link>
+            </div>
+
             {error && (
               <div className="google-login-alert" role="alert">
                 {error}
@@ -242,41 +263,50 @@ export default function Login() {
           </form>
 
           <div className="google-login-divider">
-            <span>Use a demo account</span>
+            <span>New to Tofado?</span>
           </div>
 
-          <div className="google-demo-list">
-            {demoAccounts.map((account) => {
-              const Icon = account.icon;
+          <Link to="/Register" className="google-create-account">
+            <span className="google-create-icon">
+              <Store size={18} />
+            </span>
 
-              return (
-                <button
-                  type="button"
-                  key={account.email}
-                  onClick={() => useDemoAccount(account)}
-                >
-                  <span className="google-demo-icon">
-                    <Icon size={18} />
-                  </span>
+            <span>
+              <strong>Create merchant account</strong>
+              <small>Apply as a retailer or wholesaler</small>
+            </span>
 
-                  <span className="google-demo-copy">
-                    <strong>{account.label}</strong>
-                    <small>{account.description}</small>
-                  </span>
+            <ArrowRight size={17} />
+          </Link>
 
-                  <ArrowRight size={16} />
-                </button>
-              );
-            })}
-          </div>
+          <details className="google-demo-panel">
+            <summary>Use a demo account</summary>
 
-          <div className="google-login-apply">
-            <span>New retailer or wholesaler?</span>
+            <div className="google-demo-list">
+              {demoAccounts.map((account) => {
+                const Icon = account.icon;
 
-            <Link to="/apply">
-              Apply for access
-            </Link>
-          </div>
+                return (
+                  <button
+                    type="button"
+                    key={account.email}
+                    onClick={() => useDemoAccount(account)}
+                  >
+                    <span className="google-demo-icon">
+                      <Icon size={18} />
+                    </span>
+
+                    <span className="google-demo-copy">
+                      <strong>{account.label}</strong>
+                      <small>{account.description}</small>
+                    </span>
+
+                    <ArrowRight size={16} />
+                  </button>
+                );
+              })}
+            </div>
+          </details>
         </section>
       </main>
 
