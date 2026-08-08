@@ -40,6 +40,10 @@ const initialEnquiry = {
   message: "",
 };
 
+function isPriceOnRequest(product) {
+  return product?.price_mode === "quote";
+}
+
 export default function PublicCatalog() {
   const { slug } = useParams();
 
@@ -85,7 +89,7 @@ export default function PublicCatalog() {
         ? payload.products
         : []
     );
-  } catch (requestError) {
+  } catch (requestError) {S
     console.error(
       "LOAD PUBLIC CATALOG ERROR:",
       requestError
@@ -166,6 +170,11 @@ export default function PublicCatalog() {
   );
 
   const addToCart = (product) => {
+    if (isPriceOnRequest(product)) {
+      openEnquiryModal(product);
+      return;
+    }
+
     const minimum = Number(product.minimum_order || 1);
 
     setSuccess("");
@@ -244,10 +253,15 @@ export default function PublicCatalog() {
   };
 
   const openEnquiryModal = (product) => {
+    const quoteProduct = isPriceOnRequest(product);
+
     setSelectedProduct(product);
     setEnquiry({
       ...initialEnquiry,
       quantity: Number(product.minimum_order || 1),
+      message: quoteProduct
+        ? `Please send me your best price for ${product.name || "this product"}.`
+        : "",
     });
     setError("");
     setSuccess("");
@@ -574,17 +588,32 @@ export default function PublicCatalog() {
                         "Wholesale grocery product"}
                     </p>
 
-                    <div className="public-product-price">
-                      <strong>
-                        SAR{" "}
-                        {Number(
-                          product.price || 0
-                        ).toFixed(2)}
-                      </strong>
+                    <div
+                      className={`public-product-price ${
+                        isPriceOnRequest(product)
+                          ? "price-on-request"
+                          : ""
+                      }`}
+                    >
+                      {isPriceOnRequest(product) ? (
+                        <>
+                          <strong>Price on request</strong>
+                          <small>
+                            Contact the merchant for current wholesale pricing
+                          </small>
+                        </>
+                      ) : (
+                        <>
+                          <strong>
+                            INR{" "}
+                            {Number(product.price || 0).toFixed(2)}
+                          </strong>
 
-                      <small>
-                        per {product.unit || "piece"}
-                      </small>
+                          <small>
+                            per {product.unit || "piece"}
+                          </small>
+                        </>
+                      )}
                     </div>
 
                     <div className="public-product-minimum">
@@ -595,31 +624,46 @@ export default function PublicCatalog() {
                       </strong>
                     </div>
 
-                    <div className="public-product-actions">
-                      <button
-                        type="button"
-                        className="order-button"
-                        disabled={
-                          Number(
-                            product.stock_quantity
-                          ) === 0
-                        }
-                        onClick={() => addToCart(product)}
-                      >
-                        <ShoppingCart size={17} />
-                        Order now
-                      </button>
+                    <div
+                      className={`public-product-actions ${
+                        isPriceOnRequest(product)
+                          ? "quote-actions"
+                          : ""
+                      }`}
+                    >
+                      {isPriceOnRequest(product) ? (
+                        <button
+                          type="button"
+                          className="request-price-button"
+                          onClick={() => openEnquiryModal(product)}
+                        >
+                          <MessageSquare size={17} />
+                          Request price
+                        </button>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            className="order-button"
+                            disabled={
+                              Number(product.stock_quantity) === 0
+                            }
+                            onClick={() => addToCart(product)}
+                          >
+                            <ShoppingCart size={17} />
+                            Order now
+                          </button>
 
-                      <button
-                        type="button"
-                        className="enquiry-button"
-                        onClick={() =>
-                          openEnquiryModal(product)
-                        }
-                      >
-                        <MessageSquare size={17} />
-                        Enquiry
-                      </button>
+                          <button
+                            type="button"
+                            className="enquiry-button"
+                            onClick={() => openEnquiryModal(product)}
+                          >
+                            <MessageSquare size={17} />
+                            Enquiry
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 </article>
@@ -648,7 +692,7 @@ export default function PublicCatalog() {
           <span>
             <strong>{cartCount} items</strong>
             <small>
-              SAR {cartTotal.toFixed(2)}
+            INR {cartTotal.toFixed(2)}
             </small>
           </span>
 
@@ -704,7 +748,7 @@ export default function PublicCatalog() {
                       <strong>{item.name}</strong>
 
                       <span>
-                        SAR{" "}
+                        INR{" "}
                         {Number(
                           item.price || 0
                         ).toFixed(2)}{" "}
@@ -735,7 +779,7 @@ export default function PublicCatalog() {
                     </div>
 
                     <strong className="public-cart-line-total">
-                      SAR{" "}
+                      INR{" "}
                       {(
                         Number(item.price || 0) *
                         Number(item.quantity || 0)
@@ -765,7 +809,7 @@ export default function PublicCatalog() {
               <span>Estimated total</span>
 
               <strong>
-                SAR {cartTotal.toFixed(2)}
+                INR {cartTotal.toFixed(2)}
               </strong>
             </div>
 
@@ -927,8 +971,11 @@ export default function PublicCatalog() {
                 <span>Product enquiry</span>
 
                 <h2>
-                  {selectedProduct?.name ||
-                    "Send enquiry"}
+                  {isPriceOnRequest(selectedProduct)
+                    ? `Request price — ${
+                        selectedProduct?.name || "Product"
+                      }`
+                    : selectedProduct?.name || "Send enquiry"}
                 </h2>
               </div>
 
@@ -1029,13 +1076,21 @@ export default function PublicCatalog() {
               </label>
 
               <label className="full">
-                <span>Enquiry message</span>
+                <span>
+                  {isPriceOnRequest(selectedProduct)
+                    ? "Price request message"
+                    : "Enquiry message"}
+                </span>
 
                 <textarea
                   required
                   rows="5"
                   value={enquiry.message}
-                  placeholder="Ask about pricing, availability, delivery or product details"
+                  placeholder={
+                    isPriceOnRequest(selectedProduct)
+                      ? "Ask for your required quantity, best price, delivery terms, or availability"
+                      : "Ask about pricing, availability, delivery or product details"
+                  }
                   onChange={(event) =>
                     setEnquiry({
                       ...enquiry,
@@ -1059,8 +1114,12 @@ export default function PublicCatalog() {
                 <Send size={18} />
 
                 {submitting
-                  ? "Sending enquiry..."
-                  : "Send enquiry"}
+                  ? isPriceOnRequest(selectedProduct)
+                    ? "Sending price request..."
+                    : "Sending enquiry..."
+                  : isPriceOnRequest(selectedProduct)
+                    ? "Request price"
+                    : "Send enquiry"}
               </button>
             </form>
           </div>

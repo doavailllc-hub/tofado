@@ -777,9 +777,10 @@ app.post(
         image_key,
         unit = "piece",
         pack_size,
-        minimum_order = 1,
-        price = 0,
-        compare_price,
+minimum_order = 1,
+price_mode = "fixed",
+price,
+compare_price,
         stock_quantity = 0,
         low_stock_level = 5,
         is_active = true,
@@ -797,14 +798,22 @@ app.post(
         });
       }
 
-      const productPrice = Number(price);
+    const cleanPriceMode =
+  price_mode === "quote" ? "quote" : "fixed";
 
-      if (!Number.isFinite(productPrice) || productPrice < 0) {
-        return res.status(400).json({
-          message: "Enter a valid product price.",
-        });
-      }
+const productPrice =
+  cleanPriceMode === "quote"
+    ? null
+    : Number(price);
 
+if (
+  cleanPriceMode === "fixed" &&
+  (!Number.isFinite(productPrice) || productPrice < 0)
+) {
+  return res.status(400).json({
+    message: "Enter a valid product price.",
+  });
+}
       const minimumOrder = Math.max(
         1,
         Number(minimum_order || 1)
@@ -833,14 +842,15 @@ app.post(
           image_key,
           unit,
           pack_size,
-          minimum_order,
-          price,
-          compare_price,
+        minimum_order,
+price_mode,
+price,
+compare_price,
           stock_quantity,
           low_stock_level,
           is_active
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?)`,
         [
           req.user.id,
           String(name).trim(),
@@ -852,8 +862,9 @@ app.post(
           String(image_key || "").trim() || null,
           String(unit || "piece").trim(),
           String(pack_size || "").trim() || null,
-          minimumOrder,
-          productPrice,
+         minimumOrder,
+cleanPriceMode,
+productPrice,
           compare_price === "" ||
           compare_price === null ||
           compare_price === undefined
@@ -878,9 +889,10 @@ app.post(
            image_key,
            unit,
            pack_size,
-           minimum_order,
-           price,
-           compare_price,
+      minimum_order,
+price_mode,
+price,
+compare_price,
            stock_quantity,
            low_stock_level,
            is_active,
@@ -955,9 +967,10 @@ app.put(
         image_key,
         unit = "piece",
         pack_size,
-        minimum_order = 1,
-        price = 0,
-        compare_price,
+      minimum_order = 1,
+price_mode = "fixed",
+price,
+compare_price,
         stock_quantity = 0,
         low_stock_level = 5,
         is_active = true,
@@ -968,7 +981,22 @@ app.put(
           message: "Product name is required.",
         });
       }
+const cleanPriceMode =
+  price_mode === "quote" ? "quote" : "fixed";
 
+const productPrice =
+  cleanPriceMode === "quote"
+    ? null
+    : Number(price);
+
+if (
+  cleanPriceMode === "fixed" &&
+  (!Number.isFinite(productPrice) || productPrice < 0)
+) {
+  return res.status(400).json({
+    message: "Enter a valid product price.",
+  });
+}
       const result = await q(
         `UPDATE wholesale_products
          SET
@@ -981,9 +1009,10 @@ app.put(
            image_key = ?,
            unit = ?,
            pack_size = ?,
-           minimum_order = ?,
-           price = ?,
-           compare_price = ?,
+         minimum_order = ?,
+price_mode = ?,
+price = ?,
+compare_price = ?,
            stock_quantity = ?,
            low_stock_level = ?,
            is_active = ?,
@@ -1000,8 +1029,9 @@ app.put(
           String(image_key || "").trim() || null,
           String(unit || "piece").trim(),
           String(pack_size || "").trim() || null,
-          Math.max(1, Number(minimum_order || 1)),
-          Math.max(0, Number(price || 0)),
+     Math.max(1, Number(minimum_order || 1)),
+cleanPriceMode,
+productPrice,
           compare_price === "" ||
           compare_price === null ||
           compare_price === undefined
@@ -1093,9 +1123,10 @@ app.patch(
           image_key,
           unit,
           pack_size,
-          minimum_order,
-          price,
-          compare_price,
+minimum_order,
+price_mode,
+price,
+compare_price,
           stock_quantity,
           low_stock_level,
           is_active,
@@ -1231,31 +1262,29 @@ app.get(
       const products = await q(
         `
         SELECT
-          id,
-          wholesaler_id,
-          name,
-          sku,
-          brand,
-          category_name,
-          description,
-          image_url,
-          unit,
-          pack_size,
-          minimum_order,
-          price,
-          compare_price,
-          stock_quantity,
-          low_stock_level,
-          is_active,
-          created_at,
-          updated_at
-
-        FROM wholesale_products
-
-        WHERE wholesaler_id = ?
-          AND is_active = 1
-
-        ORDER BY id DESC
+  id,
+  wholesaler_id,
+  name,
+  sku,
+  brand,
+  category_name,
+  description,
+  image_url,
+  unit,
+  pack_size,
+  minimum_order,
+  price_mode,
+  price,
+  compare_price,
+  stock_quantity,
+  low_stock_level,
+  is_active,
+  created_at,
+  updated_at
+FROM wholesale_products
+WHERE wholesaler_id = ?
+  AND is_active = 1
+ORDER BY id DESC
         `,
         [catalog.wholesaler_id]
       );
@@ -1334,6 +1363,7 @@ app.get(
            unit,
            pack_size,
            minimum_order,
+           price_mode,
            price,
            compare_price,
            stock_quantity,
@@ -1402,6 +1432,7 @@ app.get(
            pack_size,
            minimum_order,
            price,
+           price_mode,
            compare_price,
            stock_quantity,
            low_stock_level,
@@ -2225,7 +2256,147 @@ app.get(
 // GET CONNECTED RETAILERS
 // GET /api/wholesaler/retailers
 // ------------------------------------------------------
+// ======================================================
+// PUBLIC: SEND PRODUCT / PRICE ENQUIRY
+// POST /api/public/catalog/:slug/enquiries
+// ======================================================
 
+app.post(
+  "/api/public/catalog/:slug/enquiries",
+  async (req, res, next) => {
+    try {
+      const slug = String(req.params.slug || "").trim();
+
+      const {
+        product_id,
+        customer_name,
+        business_name = "",
+        phone,
+        email = "",
+        quantity = 1,
+        message,
+      } = req.body || {};
+
+      if (!slug) {
+        return res.status(400).json({
+          message: "Catalog slug is required.",
+        });
+      }
+
+      if (!String(customer_name || "").trim()) {
+        return res.status(400).json({
+          message: "Your name is required.",
+        });
+      }
+
+      if (!String(phone || "").trim()) {
+        return res.status(400).json({
+          message: "Phone number is required.",
+        });
+      }
+
+      if (!String(message || "").trim()) {
+        return res.status(400).json({
+          message: "Enquiry message is required.",
+        });
+      }
+
+      const [catalog] = await q(
+        `
+        SELECT
+          c.id,
+          c.wholesaler_id,
+          c.slug
+        FROM wholesale_catalogs c
+        INNER JOIN users u
+          ON u.id = c.wholesaler_id
+        WHERE c.slug = ?
+          AND c.is_published = 1
+          AND u.status = 'active'
+        LIMIT 1
+        `,
+        [slug]
+      );
+
+      if (!catalog) {
+        return res.status(404).json({
+          message: "Catalog not found or unavailable.",
+        });
+      }
+
+      let product = null;
+
+      if (product_id) {
+        [product] = await q(
+          `
+          SELECT
+            id,
+            name,
+            minimum_order,
+            is_active
+          FROM wholesale_products
+          WHERE id = ?
+            AND wholesaler_id = ?
+            AND is_active = 1
+          LIMIT 1
+          `,
+          [product_id, catalog.wholesaler_id]
+        );
+
+        if (!product) {
+          return res.status(404).json({
+            message: "Product not found or unavailable.",
+          });
+        }
+      }
+
+      const enquiryQuantity = Math.max(
+        product?.minimum_order || 1,
+        Number(quantity || 1)
+      );
+
+      const result = await q(
+        `
+        INSERT INTO wholesale_catalog_enquiries
+        (
+          wholesaler_id,
+          product_id,
+          customer_name,
+          business_name,
+          phone,
+          email,
+          message,
+          quantity,
+          status
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'new')
+        `,
+        [
+          catalog.wholesaler_id,
+          product?.id || null,
+          String(customer_name).trim(),
+          String(business_name || "").trim() || null,
+          String(phone).trim(),
+          String(email || "").trim() || null,
+          String(message).trim(),
+          enquiryQuantity,
+        ]
+      );
+
+      return res.status(201).json({
+        message: "Enquiry sent successfully.",
+        enquiry_id: result.insertId,
+      });
+    } catch (error) {
+      console.error(
+        "PUBLIC CATALOG ENQUIRY ERROR:",
+        error
+      );
+
+      next(error);
+    }
+  }
+);
 app.get(
   "/api/wholesaler/retailers",
   auth,
