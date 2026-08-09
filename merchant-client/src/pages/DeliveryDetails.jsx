@@ -12,6 +12,7 @@ import {
   Phone,
   RefreshCw,
   Route,
+  Save,
   Store,
   Truck,
   UserRound,
@@ -145,6 +146,14 @@ export default function DeliveryDetails() {
   const [items, setItems] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [success, setSuccess] = useState("");
+  const [form, setForm] = useState({
+    driver_name: "",
+    driver_phone: "",
+    vehicle_number: "",
+    delivery_notes: "",
+  });
 
   const loadDelivery = useCallback(
     async (showRefresh = false) => {
@@ -173,6 +182,14 @@ export default function DeliveryDetails() {
               ? deliveryData.items
               : []
         );
+        setForm({
+          driver_name: deliveryData?.driver_name || "",
+          driver_phone: deliveryData?.driver_phone || "",
+          vehicle_number:
+            deliveryData?.vehicle_number || deliveryData?.vehicle_no || "",
+          delivery_notes:
+            deliveryData?.delivery_notes || deliveryData?.notes || "",
+        });
       } catch (requestError) {
         setError(
           requestError.response?.data?.message ||
@@ -206,6 +223,56 @@ export default function DeliveryDetails() {
         100
     );
   }, [currentRank]);
+
+  const saveTransport = async () => {
+    try {
+      setSaving(true);
+      setError("");
+      setSuccess("");
+      const { data } = await api.patch(`/wholesaler/deliveries/${id}`, {
+        driver_name: form.driver_name.trim() || null,
+        driver_phone: form.driver_phone.trim() || null,
+        vehicle_number: form.vehicle_number.trim() || null,
+        delivery_notes: form.delivery_notes.trim() || null,
+      });
+      setDelivery((current) => ({ ...current, ...(data?.delivery || {}) }));
+      setSuccess("Delivery information saved.");
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || "Unable to save delivery information.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const updateDeliveryStatus = async (status) => {
+    if (
+      ["dispatched", "out_for_delivery"].includes(status) &&
+      (!form.driver_name.trim() || !form.vehicle_number.trim())
+    ) {
+      setError("Add driver name and vehicle number before dispatching.");
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setError("");
+      setSuccess("");
+      const { data } = await api.patch(`/wholesaler/deliveries/${id}`, {
+        status,
+        driver_name: form.driver_name.trim() || null,
+        driver_phone: form.driver_phone.trim() || null,
+        vehicle_number: form.vehicle_number.trim() || null,
+        delivery_notes: form.delivery_notes.trim() || null,
+      });
+      setDelivery((current) => ({ ...current, ...(data?.delivery || {}), status }));
+      setSuccess(`Delivery updated to ${readable(status)}.`);
+      await loadDelivery();
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || "Unable to update delivery status.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (!delivery && !error) {
     return <Spinner />;
@@ -281,6 +348,9 @@ export default function DeliveryDetails() {
       {error && (
         <div className="delivery-alert">{error}</div>
       )}
+      {success && (
+        <div className="delivery-success">{success}</div>
+      )}
 
       {delivery && (
         <>
@@ -304,6 +374,103 @@ export default function DeliveryDetails() {
                 className="delivery-progress-fill"
                 style={{ width: `${progress}%` }}
               />
+            </div>
+          </section>
+
+          <section className="delivery-operations-card">
+            <div className="delivery-section-heading">
+              <div><Truck size={20} /></div>
+              <span>
+                <strong>Delivery operations</strong>
+                <small>Assign transport and update fulfilment progress</small>
+              </span>
+            </div>
+
+            <div className="delivery-edit-grid">
+              <label>
+                <span>Driver name</span>
+                <input
+                  value={form.driver_name}
+                  placeholder="Driver full name"
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, driver_name: event.target.value }))
+                  }
+                />
+              </label>
+              <label>
+                <span>Driver phone</span>
+                <input
+                  value={form.driver_phone}
+                  placeholder="+966 5X XXX XXXX"
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, driver_phone: event.target.value }))
+                  }
+                />
+              </label>
+              <label>
+                <span>Vehicle number</span>
+                <input
+                  value={form.vehicle_number}
+                  placeholder="Vehicle / plate number"
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, vehicle_number: event.target.value }))
+                  }
+                />
+              </label>
+              <label className="full">
+                <span>Delivery notes</span>
+                <textarea
+                  rows="3"
+                  value={form.delivery_notes}
+                  placeholder="Driver instructions, warehouse notes, contact details..."
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, delivery_notes: event.target.value }))
+                  }
+                />
+              </label>
+            </div>
+
+            <div className="delivery-operation-actions">
+              <button
+                type="button"
+                className="delivery-save-button"
+                disabled={saving}
+                onClick={saveTransport}
+              >
+                <Save size={16} />
+                {saving ? "Saving..." : "Save transport details"}
+              </button>
+            </div>
+
+            <div className="delivery-status-workflow">
+              {trackingSteps.map((step) => {
+                const Icon = step.icon;
+                const active = String(delivery.status || "") === step.id;
+                const completed =
+                  currentRank >= (statusRank[step.id] ?? 0) && currentRank >= 0;
+                return (
+                  <button
+                    type="button"
+                    key={step.id}
+                    className={`${active ? "active" : ""} ${completed ? "completed" : ""}`}
+                    disabled={saving || delivery.status === "cancelled"}
+                    onClick={() => updateDeliveryStatus(step.id)}
+                  >
+                    <Icon size={16} />
+                    {step.label}
+                  </button>
+                );
+              })}
+              {delivery.status !== "delivered" && delivery.status !== "cancelled" && (
+                <button
+                  type="button"
+                  className="danger"
+                  disabled={saving}
+                  onClick={() => updateDeliveryStatus("cancelled")}
+                >
+                  Cancel delivery
+                </button>
+              )}
             </div>
           </section>
 
@@ -441,7 +608,7 @@ export default function DeliveryDetails() {
               <InfoRow
                 icon={Truck}
                 label="Vehicle"
-                value={delivery.vehicle_no}
+                value={delivery.vehicle_number || delivery.vehicle_no}
               />
 
               <InfoRow

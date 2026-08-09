@@ -95,6 +95,8 @@ export default function CatalogOrders() {
     "merchant_delivery"
   );
   const [deliveryNotes, setDeliveryNotes] = useState("");
+  const [quotePrices, setQuotePrices] = useState({});
+  const [quoteSavingId, setQuoteSavingId] = useState(null);
 
   const loadOrders = async (showRefresh = false) => {
     try {
@@ -215,6 +217,11 @@ export default function CatalogOrders() {
         details.delivery_type || "merchant_delivery"
       );
       setDeliveryNotes(details.delivery_notes || "");
+      const initialQuotePrices = {};
+      (details.items || []).forEach((item) => {
+        if (Number(item.unit_price || 0) > 0) initialQuotePrices[item.id] = String(item.unit_price);
+      });
+      setQuotePrices(initialQuotePrices);
     } catch (requestError) {
       setWorkflowError(
         requestError.response?.data?.message ||
@@ -247,6 +254,52 @@ export default function CatalogOrders() {
     );
   };
 
+  const itemNeedsQuote = (item) =>
+    String(item.price_mode || "").toLowerCase() === "quote" ||
+    Number(item.unit_price || 0) <= 0;
+
+  const hasUnpricedItems = (selectedOrder?.items || []).some(
+    (item) => itemNeedsQuote(item) && Number(item.unit_price || 0) <= 0
+  );
+
+  const saveQuotedPrice = async (item) => {
+    if (!selectedOrder || !item?.id) return;
+    const unitPrice = Number(quotePrices[item.id]);
+    if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
+      setWorkflowError("Enter a valid quoted unit price greater than SAR 0.00.");
+      return;
+    }
+    try {
+      setQuoteSavingId(item.id);
+      setWorkflowError("");
+      const response = await api.patch(
+        `/wholesaler/orders/${selectedOrder.id}/items/${item.id}/price`,
+        { unit_price: unitPrice }
+      );
+      const result = response.data || {};
+      setSelectedOrder((current) => {
+        if (!current) return current;
+        const nextItems = (current.items || []).map((x) =>
+          x.id === item.id ? {
+            ...x, unit_price: unitPrice,
+            line_total: result.line_total ?? Number(x.quantity || 0) * unitPrice,
+            price_mode: "fixed"
+          } : x
+        );
+        const total = result.total_amount ?? nextItems.reduce((s,x)=>s+Number(x.line_total||0),0);
+        return {...current, items: nextItems, subtotal: result.subtotal ?? total, total_amount: total};
+      });
+      setOrders((current) => (current || []).map((o) =>
+        o.id === selectedOrder.id && result.total_amount !== undefined
+          ? {...o, total_amount: Number(result.total_amount)} : o
+      ));
+    } catch (e) {
+      setWorkflowError(e.response?.data?.message || "Unable to save the quoted price.");
+    } finally {
+      setQuoteSavingId(null);
+    }
+  };
+
   const confirmAndGenerateInvoice = async () => {
     if (!selectedOrder) return;
 
@@ -254,18 +307,17 @@ export default function CatalogOrders() {
       setWorkflowLoading(true);
       setWorkflowError("");
 
-      const response = await api.post(
-        `/wholesaler/catalog/orders/${selectedOrder.id}/confirm`,
-        {
-          payment_type: paymentType,
-          payment_due_date:
-            paymentType === "due" ||
-            paymentType === "credit"
-              ? paymentDueDate || null
-              : null,
-        }
-      );
-
+const response = await api.post(
+  `/wholesaler/orders/${selectedOrder.id}/confirm`,
+  {
+    payment_type: paymentType,
+    payment_due_date:
+      paymentType === "due" ||
+      paymentType === "credit"
+        ? paymentDueDate || null
+        : null,
+  }
+);
       const result = response.data || {};
 
       updateLocalOrder(selectedOrder.id, {
@@ -721,7 +773,7 @@ export default function CatalogOrders() {
                         <article
                           key={item.id || item.product_id}
                         >
-                          <div>
+                          <div className="ov3-product-image">
                             {item.image_url ? (
                               <img
                                 src={item.image_url}
@@ -732,18 +784,43 @@ export default function CatalogOrders() {
                             )}
                           </div>
 
-                          <span>
+                          <span className="ov3-product-info">
                             <strong>{item.product_name}</strong>
                             <small>
                               {item.quantity}{" "}
                               {item.unit || "piece"} ·{" "}
                               {item.sku || "No SKU"}
                             </small>
+                            {itemNeedsQuote(item) && selectedOrder.status === "pending" && (
+                              <div className="ov3-quote-editor">
+                                <label>
+                                  <span>Quoted unit price</span>
+                                  <div className="ov3-price-input">
+                                    <b>SAR</b>
+                                    <input type="number" min="0.01" step="0.01"
+                                      placeholder="0.00"
+                                      value={quotePrices[item.id] ?? ""}
+                                      onChange={(e) => setQuotePrices((x) => ({...x,[item.id]:e.target.value}))}
+                                    />
+                                  </div>
+                                </label>
+                                <button type="button"
+                                  disabled={quoteSavingId === item.id || workflowLoading}
+                                  onClick={() => saveQuotedPrice(item)}>
+                                  {quoteSavingId === item.id ? "Saving..." : "Save price"}
+                                </button>
+                              </div>
+                            )}
                           </span>
-
-                          <strong>
-                            SAR {money(item.line_total)}
-                          </strong>
+                          <span className="ov3-line-total">
+                            {itemNeedsQuote(item) && Number(item.unit_price || 0) <= 0
+                              ? <em>Price required</em>
+                              : <>
+                                  <small>SAR {money(item.unit_price)} × {Number(item.quantity || 0)}</small>
+                                  <strong>SAR {money(item.line_total)}</strong>
+                                </>
+                            }
+                          </span>
                         </article>
                       ))
                     ) : (
@@ -774,12 +851,14 @@ export default function CatalogOrders() {
                   {selectedOrder.status === "pending" ? (
                     <div className="ov3-confirm-box">
                       <p>
-                        Confirm this order to generate its invoice.
+                        {hasUnpricedItems
+                          ? "Set a quoted price for every price-on-request item before confirming this order."
+                          : "Confirm this order to generate its invoice."}
                       </p>
 
                       <button
                         type="button"
-                        disabled={workflowLoading}
+                        disabled={workflowLoading || hasUnpricedItems}
                         onClick={confirmAndGenerateInvoice}
                       >
                         <CheckCircle2 size={17} />

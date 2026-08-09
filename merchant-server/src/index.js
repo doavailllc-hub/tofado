@@ -3234,7 +3234,6 @@ app.get(
 // GET ONE DELIVERY WITH ITEMS
 // GET /api/wholesaler/deliveries/:id
 // ======================================================
-
 app.get(
   "/api/wholesaler/deliveries/:id",
   auth,
@@ -3244,7 +3243,10 @@ app.get(
       const wholesalerId = Number(req.user.id);
       const deliveryId = Number(req.params.id);
 
-      if (!deliveryId) {
+      if (
+        !Number.isInteger(deliveryId) ||
+        deliveryId <= 0
+      ) {
         return res.status(400).json({
           message: "Invalid delivery ID.",
         });
@@ -3263,51 +3265,45 @@ app.get(
           d.delivery_notes,
           d.delivery_notes AS notes,
           d.status,
+
           d.driver_name,
           d.driver_phone,
+
           d.vehicle_number,
           d.vehicle_number AS vehicle_no,
+
+          d.packed_at,
+          d.ready_at,
           d.dispatched_at,
+          d.out_for_delivery_at,
           d.delivered_at,
+
           d.created_at,
           d.updated_at,
 
-          NULL AS packed_at,
-          NULL AS ready_at,
-          NULL AS out_for_delivery_at,
-
-          po.order_no,
-          po.retailer_id,
-          po.delivery_address,
-          po.required_date,
-          po.notes AS order_notes,
-          po.subtotal,
-          po.tax_amount,
-          po.total_amount,
-
-          u.business_name,
-          u.business_name AS retailer_name,
-          u.name AS contact_name,
-          u.phone AS contact_phone,
-          u.phone AS retailer_phone,
-          u.email AS retailer_email,
-          u.location
+          o.order_no,
+          o.customer_name,
+          o.business_name,
+          o.phone,
+          o.email,
+          o.delivery_address,
+          o.required_date,
+          o.total_amount
 
         FROM wholesale_catalog_deliveries d
 
-        INNER JOIN purchase_orders po
-          ON po.id = d.order_id
-
-        INNER JOIN users u
-          ON u.id = po.retailer_id
-          AND u.role = 'retailer'
+        INNER JOIN wholesale_catalog_orders o
+          ON o.id = d.order_id
 
         WHERE d.id = ?
           AND d.wholesaler_id = ?
 
         LIMIT 1
         `,
-        [deliveryId, wholesalerId]
+        [
+          deliveryId,
+          wholesalerId,
+        ]
       );
 
       if (!deliveries.length) {
@@ -3322,19 +3318,21 @@ app.get(
       const items = await q(
         `
         SELECT
-          poi.id,
-          poi.order_id,
-          poi.product_name,
-          poi.quantity,
-          poi.unit,
-          poi.unit_price,
-          poi.notes
+          oi.id,
+          oi.order_id,
+          oi.product_id,
+          oi.product_name,
+          oi.sku,
+          oi.unit,
+          oi.price,
+          oi.quantity,
+          oi.line_total
 
-        FROM purchase_order_items poi
+        FROM wholesale_catalog_order_items oi
 
-        WHERE poi.order_id = ?
+        WHERE oi.order_id = ?
 
-        ORDER BY poi.id ASC
+        ORDER BY oi.id ASC
         `,
         [delivery.order_id]
       );
@@ -3357,7 +3355,190 @@ app.get(
 // GET ONE WHOLESALER INVOICE
 // GET /api/wholesaler/invoices/:id
 // ======================================================
+// ======================================================
+// WHOLESALER: UPDATE DELIVERY
+// PATCH /api/wholesaler/deliveries/:id
+// ======================================================
 
+app.patch(
+  "/api/wholesaler/deliveries/:id",
+  auth,
+  allow("wholesaler"),
+  async (req, res, next) => {
+    try {
+      const wholesalerId = Number(req.user.id);
+      const deliveryId = Number(req.params.id);
+
+      if (
+        !Number.isInteger(deliveryId) ||
+        deliveryId <= 0
+      ) {
+        return res.status(400).json({
+          message: "Invalid delivery ID.",
+        });
+      }
+
+      const {
+        driver_name,
+        driver_phone,
+        vehicle_number,
+        delivery_notes,
+        status,
+      } = req.body || {};
+
+      // Check delivery ownership
+      const deliveries = await q(
+        `
+        SELECT
+          id,
+          order_id,
+          status
+        FROM wholesale_catalog_deliveries
+        WHERE id = ?
+          AND wholesaler_id = ?
+        LIMIT 1
+        `,
+        [
+          deliveryId,
+          wholesalerId,
+        ]
+      );
+
+      if (!deliveries.length) {
+        return res.status(404).json({
+          message:
+            "Delivery not found or it does not belong to your business.",
+        });
+      }
+
+      const delivery = deliveries[0];
+
+      const allowedStatuses = [
+        "pending",
+        "packed",
+        "ready",
+        "dispatched",
+        "out_for_delivery",
+        "delivered",
+        "cancelled",
+      ];
+
+      const nextStatus =
+        status !== undefined
+          ? String(status).trim().toLowerCase()
+          : delivery.status;
+
+      if (!allowedStatuses.includes(nextStatus)) {
+        return res.status(400).json({
+          message: "Invalid delivery status.",
+        });
+      }
+
+      await q(
+        `
+        UPDATE wholesale_catalog_deliveries
+
+        SET
+          driver_name = ?,
+          driver_phone = ?,
+          vehicle_number = ?,
+          delivery_notes = ?,
+          status = ?,
+
+          packed_at =
+            CASE
+              WHEN ? = 'packed'
+                AND packed_at IS NULL
+              THEN CURRENT_TIMESTAMP
+              ELSE packed_at
+            END,
+
+          ready_at =
+            CASE
+              WHEN ? = 'ready'
+                AND ready_at IS NULL
+              THEN CURRENT_TIMESTAMP
+              ELSE ready_at
+            END,
+
+          dispatched_at =
+            CASE
+              WHEN ? = 'dispatched'
+                AND dispatched_at IS NULL
+              THEN CURRENT_TIMESTAMP
+              ELSE dispatched_at
+            END,
+
+          out_for_delivery_at =
+            CASE
+              WHEN ? = 'out_for_delivery'
+                AND out_for_delivery_at IS NULL
+              THEN CURRENT_TIMESTAMP
+              ELSE out_for_delivery_at
+            END,
+
+          delivered_at =
+            CASE
+              WHEN ? = 'delivered'
+                AND delivered_at IS NULL
+              THEN CURRENT_TIMESTAMP
+              ELSE delivered_at
+            END,
+
+          updated_at = CURRENT_TIMESTAMP
+
+        WHERE id = ?
+          AND wholesaler_id = ?
+        `,
+        [
+          driver_name || null,
+          driver_phone || null,
+          vehicle_number || null,
+          delivery_notes || null,
+
+          nextStatus,
+
+          nextStatus,
+          nextStatus,
+          nextStatus,
+          nextStatus,
+          nextStatus,
+
+          deliveryId,
+          wholesalerId,
+        ]
+      );
+
+      const updated = await q(
+        `
+        SELECT *
+        FROM wholesale_catalog_deliveries
+        WHERE id = ?
+          AND wholesaler_id = ?
+        LIMIT 1
+        `,
+        [
+          deliveryId,
+          wholesalerId,
+        ]
+      );
+
+      return res.json({
+        message:
+          "Delivery information saved successfully.",
+
+        delivery: updated[0],
+      });
+    } catch (error) {
+      console.error(
+        "UPDATE DELIVERY ERROR:",
+        error
+      );
+
+      next(error);
+    }
+  }
+);
 app.get(
   "/api/wholesaler/invoices/:id",
   auth,
@@ -4368,5 +4549,578 @@ app.post(
       next(error);
     }
   }
+);// ======================================================
+// WHOLESALER: CONFIRM ORDER + GENERATE INVOICE
+// POST /api/wholesaler/orders/:id/confirm
+// ======================================================
+
+// ======================================================
+// WHOLESALER: CONFIRM ORDER + GENERATE INVOICE
+// POST /api/wholesaler/orders/:id/confirm
+// ======================================================
+
+app.post(
+  "/api/wholesaler/orders/:id/confirm",
+  auth,
+  allow("wholesaler"),
+  async (req, res, next) => {
+    const connection = await pool.getConnection();
+
+    try {
+      const {
+        payment_type = "due",
+        payment_due_date = null,
+      } = req.body || {};
+
+      const allowedPayments = [
+        "online",
+        "due",
+        "credit",
+        "cash_on_delivery",
+      ];
+
+      if (!allowedPayments.includes(payment_type)) {
+        return res.status(400).json({
+          message: "Invalid payment type.",
+        });
+      }
+
+      await connection.beginTransaction();
+
+      const orderId = Number(req.params.id);
+
+      const [[order]] = await connection.query(
+        `
+        SELECT *
+        FROM wholesale_catalog_orders
+        WHERE id = ?
+          AND wholesaler_id = ?
+        LIMIT 1
+        FOR UPDATE
+        `,
+        [orderId, req.user.id]
+      );
+
+      if (!order) {
+        await connection.rollback();
+
+        return res.status(404).json({
+          message: "Order not found.",
+        });
+      }
+
+      if (order.status === "cancelled") {
+        await connection.rollback();
+
+        return res.status(409).json({
+          message: "Cancelled orders cannot be confirmed.",
+        });
+      }
+
+      const [items] = await connection.query(
+        `
+        SELECT
+          oi.id,
+          oi.product_id,
+          oi.product_name,
+          oi.sku,
+          oi.unit,
+          oi.price,
+          oi.quantity,
+          oi.line_total,
+          p.price_mode
+        FROM wholesale_catalog_order_items oi
+
+        LEFT JOIN wholesale_products p
+          ON p.id = oi.product_id
+
+        WHERE oi.order_id = ?
+        ORDER BY oi.id ASC
+        `,
+        [orderId]
+      );
+
+      if (!items.length) {
+        await connection.rollback();
+
+        return res.status(400).json({
+          message: "Order has no products.",
+        });
+      }
+
+      const hasMissingQuotePrice = items.some(
+        (item) =>
+          item.price_mode === "quote" &&
+          Number(item.price || 0) <= 0
+      );
+
+      if (hasMissingQuotePrice) {
+        await connection.rollback();
+
+        return res.status(400).json({
+          message:
+            "Enter a price for all price-on-request products before confirming this order.",
+        });
+      }
+
+      const totalAmount = items.reduce(
+        (total, item) =>
+          total +
+          Number(item.quantity || 0) *
+            Number(item.price || 0),
+        0
+      );
+
+      if (totalAmount <= 0) {
+        await connection.rollback();
+
+        return res.status(400).json({
+          message:
+            "Order total must be greater than zero before confirmation.",
+        });
+      }
+
+      await connection.query(
+        `
+        UPDATE wholesale_catalog_orders
+        SET
+          total_amount = ?,
+          status = 'confirmed',
+          payment_type = ?,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+          AND wholesaler_id = ?
+        `,
+        [
+          totalAmount,
+          payment_type,
+          orderId,
+          req.user.id,
+        ]
+      );
+
+      const [[existingInvoice]] =
+        await connection.query(
+          `
+          SELECT *
+          FROM wholesale_catalog_invoices
+          WHERE order_id = ?
+          LIMIT 1
+          `,
+          [orderId]
+        );
+
+      let invoiceId = existingInvoice?.id || null;
+      let invoiceNo =
+        existingInvoice?.invoice_no || null;
+
+      if (!existingInvoice) {
+        invoiceNo =
+          `INV-${Date.now()
+            .toString()
+            .slice(-10)}`;
+
+        const [invoiceResult] =
+          await connection.query(
+            `
+            INSERT INTO wholesale_catalog_invoices
+            (
+              invoice_no,
+              order_id,
+              wholesaler_id,
+              customer_name,
+              business_name,
+              phone,
+              email,
+              total_amount,
+              payment_type,
+              payment_status,
+              payment_due_date,
+              status
+            )
+            VALUES
+            (
+              ?, ?, ?, ?, ?, ?, ?, ?, ?,
+              'pending',
+              ?,
+              'issued'
+            )
+            `,
+            [
+              invoiceNo,
+              order.id,
+              order.wholesaler_id,
+              order.customer_name,
+              order.business_name,
+              order.phone,
+              order.email,
+              totalAmount,
+              payment_type,
+              payment_due_date,
+            ]
+          );
+
+        invoiceId = invoiceResult.insertId;
+      }
+
+      await connection.commit();
+
+      return res.status(201).json({
+        message:
+          "Order confirmed and invoice generated.",
+        order_id: orderId,
+        invoice_id: invoiceId,
+        invoice_no: invoiceNo,
+        total_amount: totalAmount,
+        payment_status:
+          existingInvoice?.payment_status ||
+          "pending",
+      });
+    } catch (error) {
+      await connection.rollback();
+
+      console.error(
+        "CONFIRM CATALOG ORDER ERROR:",
+        error
+      );
+
+      next(error);
+    } finally {
+      connection.release();
+    }
+  }
 );
-app.listen(process.env.PORT || 5000, () => console.log(`Tofado API running on ${process.env.PORT || 5000}`));
+
+// ======================================================
+// WHOLESALER: UPDATE ORDER PAYMENT
+// POST /api/wholesaler/orders/:id/payment
+// ======================================================
+
+app.post(
+  "/api/wholesaler/orders/:id/payment",
+  auth,
+  allow("wholesaler"),
+  async (req, res, next) => {
+    try {
+      const orderId = Number(req.params.id);
+
+      const {
+        payment_type,
+        payment_status,
+        amount,
+        reference,
+      } = req.body || {};
+
+      if (
+        !Number.isInteger(orderId) ||
+        orderId <= 0
+      ) {
+        return res.status(400).json({
+          message: "Invalid order ID.",
+        });
+      }
+
+      const allowedTypes = [
+        "online",
+        "due",
+        "credit",
+        "cash",
+      ];
+
+      const allowedStatuses = [
+        "pending",
+        "partial",
+        "paid",
+      ];
+
+      if (
+        payment_type &&
+        !allowedTypes.includes(payment_type)
+      ) {
+        return res.status(400).json({
+          message: "Invalid payment type.",
+        });
+      }
+
+      if (
+        payment_status &&
+        !allowedStatuses.includes(
+          payment_status
+        )
+      ) {
+        return res.status(400).json({
+          message: "Invalid payment status.",
+        });
+      }
+
+      const [order] = await q(
+        `
+        SELECT id, total_amount
+        FROM wholesale_catalog_orders
+        WHERE id = ?
+          AND wholesaler_id = ?
+        LIMIT 1
+        `,
+        [orderId, req.user.id]
+      );
+
+      if (!order) {
+        return res.status(404).json({
+          message: "Order not found.",
+        });
+      }
+
+      await q(
+        `
+        UPDATE wholesale_catalog_orders
+        SET
+          payment_type = ?,
+          payment_status = ?,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+          AND wholesaler_id = ?
+        `,
+        [
+          payment_type || null,
+          payment_status || "pending",
+          orderId,
+          req.user.id,
+        ]
+      );
+
+      await q(
+        `
+        UPDATE wholesale_invoices
+        SET
+          payment_status = ?,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE order_id = ?
+          AND wholesaler_id = ?
+        `,
+        [
+          payment_status || "pending",
+          orderId,
+          req.user.id,
+        ]
+      );
+
+      return res.json({
+        message:
+          "Payment information updated.",
+        order_id: orderId,
+        payment_type,
+        payment_status:
+          payment_status || "pending",
+        amount:
+          amount !== undefined
+            ? Number(amount)
+            : Number(
+                order.total_amount || 0
+              ),
+        reference: reference || null,
+      });
+    } catch (error) {
+      console.error(
+        "UPDATE ORDER PAYMENT ERROR:",
+        error
+      );
+
+      next(error);
+    }
+  }
+);
+// ======================================================
+// WHOLESALER: SET QUOTED PRICE FOR ORDER ITEM
+// PATCH /api/wholesaler/orders/:orderId/items/:itemId/price
+// ======================================================
+
+app.patch(
+  "/api/wholesaler/orders/:orderId/items/:itemId/price",
+  auth,
+  allow("wholesaler"),
+  async (req, res, next) => {
+    const connection = await pool.getConnection();
+
+    try {
+      await connection.beginTransaction();
+
+      const orderId = Number(req.params.orderId);
+      const itemId = Number(req.params.itemId);
+      const unitPrice = Number(req.body?.unit_price);
+
+      if (
+        !Number.isInteger(orderId) ||
+        orderId <= 0 ||
+        !Number.isInteger(itemId) ||
+        itemId <= 0
+      ) {
+        await connection.rollback();
+
+        return res.status(400).json({
+          message: "Invalid order or item ID.",
+        });
+      }
+
+      if (
+        !Number.isFinite(unitPrice) ||
+        unitPrice <= 0
+      ) {
+        await connection.rollback();
+
+        return res.status(400).json({
+          message:
+            "Quoted price must be greater than SAR 0.00.",
+        });
+      }
+
+      // Make sure order belongs to logged-in wholesaler
+      const [[order]] = await connection.query(
+        `
+        SELECT
+          id,
+          wholesaler_id,
+          status
+        FROM wholesale_catalog_orders
+        WHERE id = ?
+          AND wholesaler_id = ?
+        LIMIT 1
+        FOR UPDATE
+        `,
+        [orderId, req.user.id]
+      );
+
+      if (!order) {
+        await connection.rollback();
+
+        return res.status(404).json({
+          message: "Order not found.",
+        });
+      }
+
+      if (order.status !== "pending") {
+        await connection.rollback();
+
+        return res.status(409).json({
+          message:
+            "Prices can only be changed before the order is confirmed.",
+        });
+      }
+
+      const [[item]] = await connection.query(
+        `
+        SELECT
+          id,
+          order_id,
+          product_id,
+          quantity,
+          price
+        FROM wholesale_catalog_order_items
+        WHERE id = ?
+          AND order_id = ?
+        LIMIT 1
+        FOR UPDATE
+        `,
+        [itemId, orderId]
+      );
+
+      if (!item) {
+        await connection.rollback();
+
+        return res.status(404).json({
+          message: "Order item not found.",
+        });
+      }
+
+      const quantity = Number(item.quantity || 0);
+
+      if (quantity <= 0) {
+        await connection.rollback();
+
+        return res.status(400).json({
+          message: "Invalid product quantity.",
+        });
+      }
+
+      const lineTotal = quantity * unitPrice;
+
+      // Your table uses price + line_total
+      await connection.query(
+        `
+        UPDATE wholesale_catalog_order_items
+        SET
+          price = ?,
+          line_total = ?
+        WHERE id = ?
+          AND order_id = ?
+        `,
+        [
+          unitPrice,
+          lineTotal,
+          itemId,
+          orderId,
+        ]
+      );
+
+      // Recalculate complete order total
+      const [[totals]] = await connection.query(
+        `
+        SELECT
+          COALESCE(SUM(line_total), 0) AS total_amount
+        FROM wholesale_catalog_order_items
+        WHERE order_id = ?
+        `,
+        [orderId]
+      );
+
+      const totalAmount = Number(
+        totals?.total_amount || 0
+      );
+
+      await connection.query(
+        `
+        UPDATE wholesale_catalog_orders
+        SET
+          total_amount = ?,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+          AND wholesaler_id = ?
+        `,
+        [
+          totalAmount,
+          orderId,
+          req.user.id,
+        ]
+      );
+
+      await connection.commit();
+
+      return res.json({
+        message: "Quoted price saved successfully.",
+        item_id: itemId,
+        unit_price: unitPrice,
+        line_total: lineTotal,
+        total_amount: totalAmount,
+      });
+    } catch (error) {
+      await connection.rollback();
+
+      console.error(
+        "UPDATE ORDER ITEM PRICE ERROR:",
+        error
+      );
+
+      next(error);
+    } finally {
+      connection.release();
+    }
+  }
+);
+app.listen(
+  process.env.PORT || 5000,
+  () =>
+    console.log(
+      `Tofado API running on ${
+        process.env.PORT || 5000
+      }`
+    )
+);

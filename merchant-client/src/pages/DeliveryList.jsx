@@ -125,6 +125,25 @@ export default function DeliveryList() {
 
   useEffect(() => {
     loadDeliveries();
+
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        loadDeliveries();
+      }
+    }, 30000);
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        loadDeliveries();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, [loadDeliveries]);
 
   const filteredDeliveries = useMemo(() => {

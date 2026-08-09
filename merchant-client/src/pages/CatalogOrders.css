@@ -658,12 +658,13 @@
   border-top: 1px solid var(--co-border-soft);
 }
 
-.ov3-products article > div {
+.ov3-product-image {
   display: grid;
   width: 48px;
   height: 48px;
   place-items: center;
   overflow: hidden;
+  border: 1px solid var(--co-border-soft);
   border-radius: 10px;
   background: var(--co-soft);
 }
@@ -853,6 +854,150 @@
   background: var(--co-blue-soft);
 }
 
+
+/* Price-on-request */
+.ov3-product-info {
+  min-width: 0;
+}
+
+.ov3-quote-editor {
+  display: grid;
+  grid-template-columns: minmax(220px, 320px) auto;
+  gap: 10px;
+  align-items: end;
+  width: min(520px, 100%);
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid #dbe5f6;
+  border-radius: 12px;
+  background: #f8fbff;
+}
+
+.ov3-quote-editor label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ov3-quote-editor label > span {
+  color: #475467;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.ov3-price-input {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  height: 42px;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid #cfd8e6;
+  border-radius: 10px;
+  background: #fff;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.ov3-price-input:focus-within {
+  border-color: #84adff;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, .08);
+}
+
+.ov3-price-input b {
+  display: inline-flex;
+  height: 100%;
+  align-items: center;
+  padding: 0 11px;
+  border-right: 1px solid var(--co-border-soft);
+  color: #667085;
+  background: #f8fafc;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.ov3-price-input input {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  padding: 0 12px;
+  border: 0;
+  outline: 0;
+  color: var(--co-text);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ov3-price-input input::placeholder {
+  color: #98a2b3;
+  font-weight: 500;
+}
+
+.ov3-quote-editor button {
+  display: inline-flex;
+  min-width: 104px;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 15px;
+  border: 1px solid var(--co-blue);
+  border-radius: 10px;
+  color: #fff;
+  background: var(--co-blue);
+  box-shadow: 0 3px 8px rgba(37, 99, 235, .16);
+  font-size: 9px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 150ms ease, transform 150ms ease;
+}
+
+.ov3-quote-editor button:hover:not(:disabled) {
+  background: #1d4ed8;
+  transform: translateY(-1px);
+}
+
+.ov3-quote-editor button:disabled,
+.ov3-confirm-box button:disabled {
+  cursor: not-allowed;
+  opacity: .5;
+}
+
+.ov3-line-total {
+  min-width: 118px;
+  text-align: right;
+}
+
+.ov3-line-total small,
+.ov3-line-total strong {
+  display: block;
+}
+
+.ov3-line-total small {
+  color: var(--co-muted);
+  font-size: 8px;
+}
+
+.ov3-line-total strong {
+  margin-top: 4px;
+  color: var(--co-text);
+  font-size: 11px;
+}
+
+.ov3-line-total em {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid #fed7aa;
+  border-radius: 999px;
+  color: #b45309;
+  background: #fff7ed;
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
 @media (max-width: 1000px) {
   .ov3-stats {
     grid-template-columns: repeat(2, 1fr);
@@ -929,6 +1074,33 @@
   .ov3-actions button,
   .ov3-primary,
   .ov3-confirm-box button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 700px) {
+  .ov3-products article {
+    grid-template-columns: 44px minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .ov3-product-image {
+    width: 44px;
+    height: 44px;
+  }
+
+  .ov3-line-total {
+    grid-column: 2;
+    min-width: 0;
+    text-align: left;
+  }
+
+  .ov3-quote-editor {
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .ov3-quote-editor button {
     width: 100%;
   }
 }
