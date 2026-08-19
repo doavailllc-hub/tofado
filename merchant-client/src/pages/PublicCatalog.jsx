@@ -599,28 +599,25 @@ export default function PublicCatalog() {
                         <>
                           <strong>Price on request</strong>
                           <small>
-                            Contact the merchant for current wholesale pricing
+                            Contact merchant for wholesale pricing
                           </small>
                         </>
                       ) : (
                         <>
-                          <strong>
-                            INR{" "}
-                            {Number(product.price || 0).toFixed(2)}
-                          </strong>
-
-                          <small>
-                            per {product.unit || "piece"}
-                          </small>
+                          <div className="price-display">
+                            <strong>
+                              ₹{Number(product.price || 0).toFixed(2)}
+                            </strong>
+                            <small>per {product.unit || "piece"}</small>
+                          </div>
                         </>
                       )}
                     </div>
 
                     <div className="public-product-minimum">
-                      Minimum order:{" "}
+                      <span>Minimum order:</span>
                       <strong>
-                        {product.minimum_order || 1}{" "}
-                        {product.unit || "piece"}
+                        {product.minimum_order || 1} {product.unit || "piece"}
                       </strong>
                     </div>
 
