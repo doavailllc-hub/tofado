@@ -1,12 +1,14 @@
 import { useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import {
   ArrowLeft,
+  BadgeCheck,
   Building2,
   CheckCircle2,
-  FileBadge2,
+  ChevronRight,
   Eye,
   EyeOff,
+  FileBadge2,
   LoaderCircle,
   LockKeyhole,
   Mail,
@@ -21,10 +23,55 @@ import api from "../services/api";
 import logo from "../assets/tofado-logo.png";
 import "./Register.css";
 
+const BUSINESS_CATEGORIES = [
+  "Grocery & FMCG",
+  "Food & Beverage",
+  "Pharmacy & Medical",
+  "Restaurant Supplies",
+  "Hotel Supplies",
+  "Building Materials",
+  "Construction",
+  "Industrial",
+  "Electronics",
+  "Automotive",
+  "Fashion & Apparel",
+  "Office Supplies",
+  "Cleaning & Hygiene",
+  "Packaging",
+  "Other",
+];
+
+const RETAILER_TYPES = [
+  "Grocery store",
+  "Supermarket",
+  "Minimart / convenience store",
+  "Restaurant / cafe",
+  "Hotel / hospitality",
+  "Pharmacy",
+  "Hardware store",
+  "Electronics store",
+  "Fashion / apparel store",
+  "Online retailer",
+  "Other retailer",
+];
+
+const WHOLESALER_TYPES = [
+  "Wholesaler",
+  "Distributor",
+  "Importer",
+  "Manufacturer",
+  "Authorized dealer",
+  "Trading company",
+  "Cash & carry",
+  "Other wholesaler",
+];
+
 const initialForm = {
   role: "retailer",
   name: "",
   business_name: "",
+  business_category: "",
+  shop_type: "",
   email: "",
   phone: "",
   location: "",
@@ -36,41 +83,61 @@ const initialForm = {
 };
 
 export default function Register() {
-  const navigate = useNavigate();
-
   const [form, setForm] = useState(initialForm);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const [success, setSuccess] = useState(false);
+  const [submittedEmail, setSubmittedEmail] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  const passwordMatches = useMemo(
-    () =>
-      form.confirm_password.length > 0 &&
-      form.password === form.confirm_password,
-    [form.password, form.confirm_password]
+  const businessTypes = useMemo(
+    () => (form.role === "wholesaler" ? WHOLESALER_TYPES : RETAILER_TYPES),
+    [form.role]
   );
+
+  const passwordStrong =
+    form.password.length >= 8 &&
+    /[A-Za-z]/.test(form.password) &&
+    /\d/.test(form.password);
+
+  const passwordMatches =
+    form.confirm_password.length > 0 &&
+    form.password === form.confirm_password;
 
   const updateField = (key, value) => {
     setError("");
-    setSuccess("");
 
     setForm((current) => ({
       ...current,
       [key]: value,
+      ...(key === "role" ? { shop_type: "" } : {}),
     }));
   };
 
   const submit = async (event) => {
     event.preventDefault();
 
-    if (form.password.length < 8) {
-      setError("Password must contain at least 8 characters.");
+    if (
+      !form.name.trim() ||
+      !form.business_name.trim() ||
+      !form.business_category ||
+      !form.shop_type ||
+      !form.email.trim() ||
+      !form.phone.trim() ||
+      !form.location.trim() ||
+      !form.address.trim()
+    ) {
+      setError("Complete all required business details.");
       return;
     }
 
-    if (form.password !== form.confirm_password) {
+    if (!passwordStrong) {
+      setError("Password must be at least 8 characters and include a letter and number.");
+      return;
+    }
+
+    if (!passwordMatches) {
       setError("Password confirmation does not match.");
       return;
     }
@@ -78,13 +145,16 @@ export default function Register() {
     try {
       setSubmitting(true);
       setError("");
-      setSuccess("");
+
+      const email = form.email.trim().toLowerCase();
 
       await api.post("/applications", {
         role: form.role,
         name: form.name.trim(),
         business_name: form.business_name.trim(),
-        email: form.email.trim().toLowerCase(),
+        business_category: form.business_category,
+        shop_type: form.shop_type,
+        email,
         phone: form.phone.trim(),
         location: form.location.trim(),
         address: form.address.trim(),
@@ -93,71 +163,191 @@ export default function Register() {
         password: form.password,
       });
 
-      setSuccess(
-        "Your registration request has been submitted. Tofado Admin will verify your business before activating the account."
-      );
-
+      setSubmittedEmail(email);
+      setSuccess(true);
       setForm(initialForm);
     } catch (requestError) {
       setError(
         requestError.response?.data?.message ||
-          "Unable to submit registration request."
+          "Unable to submit your merchant application."
       );
     } finally {
       setSubmitting(false);
     }
   };
 
+  if (success) {
+    return (
+      <div className="merchant-register-page">
+        <header className="merchant-register-topbar">
+          <Link to="/login" className="merchant-register-logo">
+            <img src={logo} alt="Tofado Merchant" />
+          </Link>
+
+          <Link to="/login" className="merchant-register-back">
+            <ArrowLeft size={16} />
+            Sign in
+          </Link>
+        </header>
+
+        <main className="merchant-register-success-wrap">
+          <section className="merchant-register-success-card">
+            <div className="merchant-register-success-icon">
+              <CheckCircle2 size={34} />
+            </div>
+
+            <span className="merchant-register-kicker">Application received</span>
+            <h1>Your business is under verification.</h1>
+            <p>
+              We received the merchant application for <strong>{submittedEmail}</strong>.
+              Tofado Admin will review the business information before the account
+              becomes active.
+            </p>
+
+            <div className="merchant-register-status-flow">
+              <div className="done">
+                <span>1</span>
+                <div>
+                  <strong>Application submitted</strong>
+                  <small>Your business details were received.</small>
+                </div>
+              </div>
+
+              <div className="active">
+                <span>2</span>
+                <div>
+                  <strong>Admin verification</strong>
+                  <small>Business information is being reviewed.</small>
+                </div>
+              </div>
+
+              <div>
+                <span>3</span>
+                <div>
+                  <strong>Account activation</strong>
+                  <small>After approval, sign in with the password you created.</small>
+                </div>
+              </div>
+            </div>
+
+            <Link to="/login" className="merchant-register-primary-link">
+              Go to sign in
+              <ChevronRight size={17} />
+            </Link>
+
+            <button
+              type="button"
+              className="merchant-register-secondary-link"
+              onClick={() => {
+                setSuccess(false);
+                setSubmittedEmail("");
+              }}
+            >
+              Submit another application
+            </button>
+          </section>
+        </main>
+      </div>
+    );
+  }
+
   return (
-    <div className="google-register-page">
-      <header className="google-register-topbar">
-        <Link to="/login" className="google-register-logo-link">
+    <div className="merchant-register-page">
+      <header className="merchant-register-topbar">
+        <Link to="/login" className="merchant-register-logo">
           <img src={logo} alt="Tofado Merchant" />
         </Link>
 
-        <Link to="/login" className="google-register-signin-link">
+        <Link to="/login" className="merchant-register-back">
           <ArrowLeft size={16} />
           Back to sign in
         </Link>
       </header>
 
-      <main className="google-register-main">
-        <section className="google-register-card">
-          <div className="google-register-heading">
-            <span className="google-register-eyebrow">Merchant registration</span>
-            <h1>Create your Tofado Merchant account</h1>
-            <p>
-              Submit your business details for verification. Access is enabled
-              after Tofado Admin approves your application.
-            </p>
+      <main className="merchant-register-shell">
+        <aside className="merchant-register-intro">
+          <span className="merchant-register-kicker">TOFADO MERCHANT</span>
+          <h1>Join the B2B marketplace built for direct trade.</h1>
+          <p>
+            Register your retail or wholesale business. After verification,
+            retailers can discover suppliers and wholesalers can publish their
+            storefront and catalog.
+          </p>
+
+          <div className="merchant-register-benefits">
+            <div>
+              <BadgeCheck size={19} />
+              <span>
+                <strong>Verified business network</strong>
+                <small>Merchant accounts are activated after admin approval.</small>
+              </span>
+            </div>
+
+            <div>
+              <Store size={19} />
+              <span>
+                <strong>Marketplace visibility</strong>
+                <small>Approved wholesalers can publish a searchable storefront.</small>
+              </span>
+            </div>
+
+            <div>
+              <ShieldCheck size={19} />
+              <span>
+                <strong>Controlled B2B access</strong>
+                <small>Retailers and wholesalers operate through verified accounts.</small>
+              </span>
+            </div>
           </div>
 
-          <form className="google-register-form" onSubmit={submit}>
-            <section className="google-register-section">
-              <div className="google-register-section-title">
-                <span className="google-register-step">1</span>
+          <div className="merchant-register-flow-card">
+            <span>How it works</span>
+            <div>
+              <b>1</b>
+              <p><strong>Register</strong><small>Submit business details</small></p>
+            </div>
+            <div>
+              <b>2</b>
+              <p><strong>Verify</strong><small>Admin reviews the application</small></p>
+            </div>
+            <div>
+              <b>3</b>
+              <p><strong>Trade</strong><small>Account becomes active</small></p>
+            </div>
+          </div>
+        </aside>
+
+        <section className="merchant-register-card">
+          <div className="merchant-register-heading">
+            <span>Merchant registration</span>
+            <h2>Create your business account</h2>
+            <p>Fields marked with * are required for verification.</p>
+          </div>
+
+          <form onSubmit={submit} className="merchant-register-form">
+            <section className="merchant-register-section">
+              <div className="merchant-register-section-head">
+                <span>1</span>
                 <div>
-                  <h2>Business type</h2>
-                  <p>Choose how you will use Tofado Merchant.</p>
+                  <h3>Choose account type</h3>
+                  <p>Select the role your business will use on Tofado.</p>
                 </div>
               </div>
 
-              <div className="google-register-role-grid">
+              <div className="merchant-register-role-grid">
                 <button
                   type="button"
                   className={form.role === "retailer" ? "active" : ""}
                   onClick={() => updateField("role", "retailer")}
                 >
-                  <span className="google-register-role-icon retailer">
-                    <Store size={20} />
-                  </span>
+                  <div className="merchant-register-role-icon">
+                    <Store size={21} />
+                  </div>
                   <span>
-                    <strong>Retail shop</strong>
-                    <small>Buy products from verified wholesalers</small>
+                    <strong>Retailer</strong>
+                    <small>Find wholesalers and purchase for your business.</small>
                   </span>
-                  <span className="google-register-role-check">
-                    {form.role === "retailer" && <CheckCircle2 size={18} />}
-                  </span>
+                  {form.role === "retailer" && <CheckCircle2 size={18} />}
                 </button>
 
                 <button
@@ -165,171 +355,157 @@ export default function Register() {
                   className={form.role === "wholesaler" ? "active" : ""}
                   onClick={() => updateField("role", "wholesaler")}
                 >
-                  <span className="google-register-role-icon wholesaler">
-                    <Building2 size={20} />
-                  </span>
+                  <div className="merchant-register-role-icon">
+                    <Building2 size={21} />
+                  </div>
                   <span>
-                    <strong>Wholesale dealer</strong>
-                    <small>Sell products and manage retailer orders</small>
+                    <strong>Wholesaler</strong>
+                    <small>Publish products and sell directly to retailers.</small>
                   </span>
-                  <span className="google-register-role-check">
-                    {form.role === "wholesaler" && <CheckCircle2 size={18} />}
-                  </span>
+                  {form.role === "wholesaler" && <CheckCircle2 size={18} />}
                 </button>
               </div>
             </section>
 
-            <section className="google-register-section">
-              <div className="google-register-section-title">
-                <span className="google-register-step">2</span>
+            <section className="merchant-register-section">
+              <div className="merchant-register-section-head">
+                <span>2</span>
                 <div>
-                  <h2>Business information</h2>
-                  <p>Use your official business and contact details.</p>
+                  <h3>Business details</h3>
+                  <p>Use official information that Tofado can verify.</p>
                 </div>
               </div>
 
-              <div className="google-register-grid">
-                <label className="google-register-field">
-                  <span>Contact person</span>
-                  <div>
-                    <UserRound size={17} />
-                    <input
-                      required
-                      autoComplete="name"
-                      value={form.name}
-                      placeholder="Full name"
-                      onChange={(event) =>
-                        updateField("name", event.target.value)
-                      }
-                    />
-                  </div>
-                </label>
+              <div className="merchant-register-grid">
+                <Field label="Contact person *" icon={<UserRound size={16} />}>
+                  <input
+                    required
+                    autoComplete="name"
+                    value={form.name}
+                    placeholder="Full name"
+                    onChange={(e) => updateField("name", e.target.value)}
+                  />
+                </Field>
 
-                <label className="google-register-field">
-                  <span>Business name</span>
-                  <div>
-                    <Building2 size={17} />
-                    <input
-                      required
-                      value={form.business_name}
-                      placeholder="Registered business name"
-                      onChange={(event) =>
-                        updateField("business_name", event.target.value)
-                      }
-                    />
-                  </div>
-                </label>
+                <Field label="Business name *" icon={<Building2 size={16} />}>
+                  <input
+                    required
+                    value={form.business_name}
+                    placeholder="Registered business name"
+                    onChange={(e) => updateField("business_name", e.target.value)}
+                  />
+                </Field>
 
-                <label className="google-register-field">
-                  <span>Email address</span>
-                  <div>
-                    <Mail size={17} />
-                    <input
-                      required
-                      type="email"
-                      autoComplete="email"
-                      value={form.email}
-                      placeholder="business@example.com"
-                      onChange={(event) =>
-                        updateField("email", event.target.value)
-                      }
-                    />
-                  </div>
-                </label>
+                <Field label="Business category *" icon={<Store size={16} />}>
+                  <select
+                    required
+                    value={form.business_category}
+                    onChange={(e) => updateField("business_category", e.target.value)}
+                  >
+                    <option value="">Select category</option>
+                    {BUSINESS_CATEGORIES.map((category) => (
+                      <option value={category} key={category}>
+                        {category}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
 
-                <label className="google-register-field">
-                  <span>Phone number</span>
-                  <div>
-                    <Phone size={17} />
-                    <input
-                      required
-                      type="tel"
-                      autoComplete="tel"
-                      value={form.phone}
-                      placeholder="+966 5X XXX XXXX"
-                      onChange={(event) =>
-                        updateField("phone", event.target.value)
-                      }
-                    />
-                  </div>
-                </label>
+                <Field
+                  label={form.role === "wholesaler" ? "Wholesale business type *" : "Retail shop type *"}
+                  icon={<Store size={16} />}
+                >
+                  <select
+                    required
+                    value={form.shop_type}
+                    onChange={(e) => updateField("shop_type", e.target.value)}
+                  >
+                    <option value="">Select business type</option>
+                    {businessTypes.map((type) => (
+                      <option value={type} key={type}>
+                        {type}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
 
-                <label className="google-register-field">
-                  <span>City or location</span>
-                  <div>
-                    <MapPin size={17} />
-                    <input
-                      required
-                      value={form.location}
-                      placeholder="Jubail, Saudi Arabia"
-                      onChange={(event) =>
-                        updateField("location", event.target.value)
-                      }
-                    />
-                  </div>
-                </label>
+                <Field label="Email address *" icon={<Mail size={16} />}>
+                  <input
+                    required
+                    type="email"
+                    autoComplete="email"
+                    value={form.email}
+                    placeholder="business@example.com"
+                    onChange={(e) => updateField("email", e.target.value)}
+                  />
+                </Field>
 
-                <label className="google-register-field">
-                  <span>Tax / VAT number</span>
-                  <div>
-                    <FileBadge2 size={17} />
-                    <input
-                      value={form.tax_number}
-                      placeholder="Optional"
-                      onChange={(event) =>
-                        updateField("tax_number", event.target.value)
-                      }
-                    />
-                  </div>
-                </label>
+                <Field label="Phone number *" icon={<Phone size={16} />}>
+                  <input
+                    required
+                    type="tel"
+                    autoComplete="tel"
+                    value={form.phone}
+                    placeholder="+966 5X XXX XXXX"
+                    onChange={(e) => updateField("phone", e.target.value)}
+                  />
+                </Field>
 
-                <label className="google-register-field">
-                  <span>Commercial licence number</span>
-                  <div>
-                    <FileBadge2 size={17} />
-                    <input
-                      value={form.license_number}
-                      placeholder="Optional"
-                      onChange={(event) =>
-                        updateField("license_number", event.target.value)
-                      }
-                    />
-                  </div>
-                </label>
+                <Field label="City / location *" icon={<MapPin size={16} />}>
+                  <input
+                    required
+                    value={form.location}
+                    placeholder="Riyadh, Saudi Arabia"
+                    onChange={(e) => updateField("location", e.target.value)}
+                  />
+                </Field>
 
-                <label className="google-register-field full">
-                  <span>Business address</span>
-                  <div className="textarea">
-                    <MapPin size={17} />
+                <Field label="Tax / VAT number" icon={<FileBadge2 size={16} />}>
+                  <input
+                    value={form.tax_number}
+                    placeholder="Optional"
+                    onChange={(e) => updateField("tax_number", e.target.value)}
+                  />
+                </Field>
+
+                <Field label="Commercial licence / CR number" icon={<FileBadge2 size={16} />}>
+                  <input
+                    value={form.license_number}
+                    placeholder="Optional"
+                    onChange={(e) => updateField("license_number", e.target.value)}
+                  />
+                </Field>
+
+                <label className="merchant-register-field full">
+                  <span>Business address *</span>
+                  <div className="merchant-register-control textarea">
+                    <MapPin size={16} />
                     <textarea
                       required
                       rows="3"
-                      autoComplete="street-address"
                       value={form.address}
                       placeholder="Building, street, district, city and postal code"
-                      onChange={(event) =>
-                        updateField("address", event.target.value)
-                      }
+                      onChange={(e) => updateField("address", e.target.value)}
                     />
                   </div>
                 </label>
               </div>
             </section>
 
-            <section className="google-register-section">
-              <div className="google-register-section-title">
-                <span className="google-register-step">3</span>
+            <section className="merchant-register-section">
+              <div className="merchant-register-section-head">
+                <span>3</span>
                 <div>
-                  <h2>Security</h2>
-                  <p>Create a password for your merchant account.</p>
+                  <h3>Account security</h3>
+                  <p>Create the password you will use after approval.</p>
                 </div>
               </div>
 
-              <div className="google-register-grid">
-                <label className="google-register-field">
-                  <span>Password</span>
-                  <div>
-                    <LockKeyhole size={17} />
+              <div className="merchant-register-grid">
+                <label className="merchant-register-field">
+                  <span>Password *</span>
+                  <div className="merchant-register-control">
+                    <LockKeyhole size={16} />
                     <input
                       required
                       minLength="8"
@@ -337,25 +513,26 @@ export default function Register() {
                       autoComplete="new-password"
                       value={form.password}
                       placeholder="Minimum 8 characters"
-                      onChange={(event) =>
-                        updateField("password", event.target.value)
-                      }
+                      onChange={(e) => updateField("password", e.target.value)}
                     />
                     <button
                       type="button"
-                      className="google-register-password-toggle"
+                      className="merchant-register-eye"
                       onClick={() => setShowPassword((value) => !value)}
                       aria-label={showPassword ? "Hide password" : "Show password"}
                     >
-                      {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
                   </div>
+                  <small className={form.password && passwordStrong ? "valid" : ""}>
+                    Use at least 8 characters with a letter and number.
+                  </small>
                 </label>
 
-                <label className="google-register-field">
-                  <span>Confirm password</span>
-                  <div>
-                    <LockKeyhole size={17} />
+                <label className="merchant-register-field">
+                  <span>Confirm password *</span>
+                  <div className="merchant-register-control">
+                    <LockKeyhole size={16} />
                     <input
                       required
                       minLength="8"
@@ -363,86 +540,91 @@ export default function Register() {
                       autoComplete="new-password"
                       value={form.confirm_password}
                       placeholder="Enter password again"
-                      onChange={(event) =>
-                        updateField("confirm_password", event.target.value)
+                      onChange={(e) =>
+                        updateField("confirm_password", e.target.value)
                       }
                     />
                     <button
                       type="button"
-                      className="google-register-password-toggle"
+                      className="merchant-register-eye"
                       onClick={() =>
                         setShowConfirmPassword((value) => !value)
                       }
                       aria-label={
-                        showConfirmPassword
-                          ? "Hide password"
-                          : "Show password"
+                        showConfirmPassword ? "Hide password" : "Show password"
                       }
                     >
-                      {showConfirmPassword ? (
-                        <EyeOff size={17} />
-                      ) : (
-                        <Eye size={17} />
-                      )}
+                      {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
                     {passwordMatches && (
                       <CheckCircle2
-                        size={17}
-                        className="google-register-password-valid"
+                        size={16}
+                        className="merchant-register-valid-icon"
                       />
                     )}
                   </div>
+                  <small className={passwordMatches ? "valid" : ""}>
+                    {form.confirm_password
+                      ? passwordMatches
+                        ? "Passwords match."
+                        : "Passwords must match."
+                      : "Repeat your password."}
+                  </small>
                 </label>
               </div>
             </section>
 
-            <div className="google-register-notice">
+            <div className="merchant-register-review-note">
               <ShieldCheck size={18} />
-              <span>
-                Your application is reviewed by Tofado Admin before account
-                activation.
-              </span>
+              <p>
+                <strong>Verification required.</strong>
+                Tofado Admin reviews your application before activating the
+                merchant account.
+              </p>
             </div>
 
             {error && (
-              <div className="google-register-alert error" role="alert">
+              <div className="merchant-register-alert" role="alert">
                 {error}
-              </div>
-            )}
-
-            {success && (
-              <div className="google-register-alert success">
-                <CheckCircle2 size={18} />
-                <span>{success}</span>
               </div>
             )}
 
             <button
               type="submit"
-              className="google-register-submit"
+              className="merchant-register-submit"
               disabled={submitting}
             >
               {submitting ? (
                 <>
-                  <LoaderCircle
-                    size={18}
-                    className="google-register-spinner"
-                  />
+                  <LoaderCircle size={18} className="merchant-register-spin" />
                   Submitting application...
                 </>
               ) : (
                 <>
-                  Submit application
+                  Submit for verification
+                  <ChevronRight size={17} />
                 </>
               )}
             </button>
 
-            <p className="google-register-login">
-              Already have an account? <Link to="/login">Sign in</Link>
+            <p className="merchant-register-login">
+              Already approved? <Link to="/login">Sign in to Tofado Merchant</Link>
             </p>
           </form>
         </section>
       </main>
     </div>
+  );
+}
+
+function Field({ label, icon, children }) {
+  return (
+    <label className="merchant-register-field">
+      <span>{label}</span>
+      <div className="merchant-register-control">
+        {icon}
+        {children}
+      </div>
+    </label>
   );
 }

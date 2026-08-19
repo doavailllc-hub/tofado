@@ -115,8 +115,185 @@ function validateProfilePayload(body = {}) {
 
   return "";
 }
+
+let registrationSchemaPromise = null;
+
+async function ensureRegistrationSchema() {
+  if (registrationSchemaPromise) return registrationSchemaPromise;
+
+  registrationSchemaPromise = (async () => {
+    const [columns] = await pool.query(
+      `
+      SELECT COLUMN_NAME
+      FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'merchant_applications'
+        AND COLUMN_NAME IN ('business_category', 'shop_type')
+      `
+    );
+
+    const existingColumns = new Set(
+      columns.map((column) => column.COLUMN_NAME)
+    );
+
+    if (!existingColumns.has("business_category")) {
+      await pool.query(
+        `
+        ALTER TABLE merchant_applications
+        ADD COLUMN business_category VARCHAR(120) NULL
+        AFTER business_name
+        `
+      );
+    }
+
+    if (!existingColumns.has("shop_type")) {
+      await pool.query(
+        `
+        ALTER TABLE merchant_applications
+        ADD COLUMN shop_type VARCHAR(120) NULL
+        AFTER business_category
+        `
+      );
+    }
+  })().catch((error) => {
+    registrationSchemaPromise = null;
+    throw error;
+  });
+
+  return registrationSchemaPromise;
+}
+
 app.get('/api/health', (req, res) => res.json({ ok: true, service: 'tofado-merchant-api' }));
-app.post('/api/applications', async (req, res, next) => { try { const { role, name, business_name, email, phone, location, address, tax_number, license_number, password } = req.body; if (!['retailer', 'wholesaler'].includes(role)) return res.status(400).json({ message: 'Invalid business type' }); if (!name || !business_name || !email || !phone || !location || !address || !password) return res.status(400).json({ message: 'Complete all required fields' }); const ex = await q('SELECT id FROM users WHERE email=? UNION SELECT id FROM merchant_applications WHERE email=?', [email, email]); if (ex.length) return res.status(409).json({ message: 'Email already registered or under review' }); const hash = hashPassword(password); await q('INSERT INTO merchant_applications(role,name,business_name,email,phone,location,address,tax_number,license_number,password_hash,status) VALUES(?,?,?,?,?,?,?,?,?,?,?)', [role, name, business_name, email, phone, location, address, tax_number || null, license_number || null, hash, 'pending']); res.status(201).json({ message: 'Verification request submitted' }) } catch (e) { next(e) } });
+app.post("/api/applications", async (req, res, next) => {
+  try {
+    await ensureRegistrationSchema();
+
+    const {
+      role,
+      name,
+      business_name,
+      business_category,
+      shop_type,
+      email,
+      phone,
+      location,
+      address,
+      tax_number,
+      license_number,
+      password,
+    } = req.body || {};
+
+    const cleanRole = String(role || "").trim().toLowerCase();
+    const cleanName = String(name || "").trim();
+    const cleanBusinessName = String(business_name || "").trim();
+    const cleanBusinessCategory = String(business_category || "").trim();
+    const cleanShopType = String(shop_type || "").trim();
+    const cleanEmail = String(email || "").trim().toLowerCase();
+    const cleanPhone = String(phone || "").trim();
+    const cleanLocation = String(location || "").trim();
+    const cleanAddress = String(address || "").trim();
+    const cleanTaxNumber = String(tax_number || "").trim() || null;
+    const cleanLicenseNumber =
+      String(license_number || "").trim() || null;
+    const cleanPassword = String(password || "");
+
+    if (!["retailer", "wholesaler"].includes(cleanRole)) {
+      return res.status(400).json({ message: "Choose retailer or wholesaler." });
+    }
+
+    if (
+      !cleanName ||
+      !cleanBusinessName ||
+      !cleanBusinessCategory ||
+      !cleanShopType ||
+      !cleanEmail ||
+      !cleanPhone ||
+      !cleanLocation ||
+      !cleanAddress ||
+      !cleanPassword
+    ) {
+      return res.status(400).json({
+        message: "Complete all required business details.",
+      });
+    }
+
+    if (cleanPassword.length < 8) {
+      return res.status(400).json({
+        message: "Password must contain at least 8 characters.",
+      });
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      return res.status(400).json({
+        message: "Enter a valid email address.",
+      });
+    }
+
+    const existing = await q(
+      `
+      SELECT email FROM users WHERE LOWER(email) = LOWER(?)
+      UNION ALL
+      SELECT email FROM merchant_applications WHERE LOWER(email) = LOWER(?)
+      LIMIT 1
+      `,
+      [cleanEmail, cleanEmail]
+    );
+
+    if (existing.length) {
+      return res.status(409).json({
+        message:
+          "This email is already registered or has an application under review.",
+      });
+    }
+
+    const passwordHash = hashPassword(cleanPassword);
+
+    const result = await q(
+      `
+      INSERT INTO merchant_applications
+      (
+        role,
+        name,
+        business_name,
+        business_category,
+        shop_type,
+        email,
+        phone,
+        location,
+        address,
+        tax_number,
+        license_number,
+        password_hash,
+        status
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+      `,
+      [
+        cleanRole,
+        cleanName,
+        cleanBusinessName,
+        cleanBusinessCategory,
+        cleanShopType,
+        cleanEmail,
+        cleanPhone,
+        cleanLocation,
+        cleanAddress,
+        cleanTaxNumber,
+        cleanLicenseNumber,
+        passwordHash,
+      ]
+    );
+
+    return res.status(201).json({
+      message: "Verification request submitted.",
+      application_id: result.insertId,
+      status: "pending",
+    });
+  } catch (error) {
+    console.error("CREATE MERCHANT APPLICATION ERROR:", error);
+    next(error);
+  }
+});
 app.post('/api/auth/login', async (req, res, next) => { try { const rows = await q('SELECT * FROM users WHERE email=? LIMIT 1', [req.body.email]); const u = rows[0]; if (!u || u.status !== 'active' || !verifyPassword(req.body.password || '', u.password_hash)) return res.status(401).json({ message: 'Invalid credentials or account not approved' }); const user = {
       id: u.id,
       name: u.name,
@@ -411,8 +588,173 @@ app.patch('/api/wholesaler/orders/:id/status', auth, allow('wholesaler'), async 
 app.get('/api/wholesaler/invoices', auth, allow('wholesaler'), async (req, res) => res.json(await q(`SELECT i.id,i.invoice_no,r.business_name retailer_name,o.order_no,i.total_amount,i.paid_amount,i.due_date,i.status FROM invoices i JOIN users r ON r.id=i.retailer_id JOIN purchase_orders o ON o.id=i.order_id WHERE i.wholesaler_id=? ORDER BY i.id DESC`, [req.user.id])));
 app.get('/api/wholesaler/payments', auth, allow('wholesaler'), async (req, res) => res.json(await q(`SELECT p.id,p.payment_no,r.business_name retailer_name,i.invoice_no,p.amount,p.method,p.paid_at,p.status FROM payments p JOIN invoices i ON i.id=p.invoice_id JOIN users r ON r.id=p.retailer_id WHERE p.wholesaler_id=? ORDER BY p.id DESC`, [req.user.id])));
 app.get('/api/wholesaler/dashboard', auth, allow('wholesaler'), async (req, res) => { const [s] = await q(`SELECT COUNT(*) total_orders,SUM(status='pending') pending_orders,SUM(status='delivered') delivered_orders,COUNT(DISTINCT retailer_id) retailers FROM purchase_orders WHERE wholesaler_id=?`, [req.user.id]); const [i] = await q(`SELECT COALESCE(SUM(total_amount-paid_amount),0) outstanding FROM invoices WHERE wholesaler_id=?`, [req.user.id]); const recent = await q(`SELECT o.id,o.order_no,r.business_name,o.created_at,o.status,o.total_amount FROM purchase_orders o JOIN users r ON r.id=o.retailer_id WHERE o.wholesaler_id=? ORDER BY o.id DESC LIMIT 8`, [req.user.id]); res.json({ stats: { total_orders: s.total_orders, pending_orders: s.pending_orders, delivered_orders: s.delivered_orders, retailers: s.retailers, outstanding: `SAR ${Number(i.outstanding).toFixed(2)}` }, recent }) });
-app.get('/api/admin/applications', auth, allow('admin'), async (req, res) => res.json(await q('SELECT id,role,name,business_name,email,phone,location,address,tax_number,license_number,status,created_at FROM merchant_applications ORDER BY id DESC')));
-app.patch('/api/admin/applications/:id', auth, allow('admin'), async (req, res, next) => { const c = await pool.getConnection(); try { const status = req.body.status; if (!['approved', 'rejected'].includes(status)) return res.status(400).json({ message: 'Invalid status' }); await c.beginTransaction(); const [[a]] = await c.query('SELECT * FROM merchant_applications WHERE id=? FOR UPDATE', [req.params.id]); if (!a) return res.status(404).json({ message: 'Request not found' }); if (a.status !== 'pending') return res.status(409).json({ message: 'Already processed' }); if (status === 'approved') await c.query('INSERT INTO users(role,name,business_name,email,phone,location,address,tax_number,license_number,password_hash,status,verified_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,NOW())', [a.role, a.name, a.business_name, a.email, a.phone, a.location, a.address, a.tax_number, a.license_number, a.password_hash, 'active']); await c.query('UPDATE merchant_applications SET status=?,reviewed_by=?,reviewed_at=NOW() WHERE id=?', [status, req.user.id, req.params.id]); await c.commit(); res.json({ message: status }) } catch (e) { await c.rollback(); next(e) } finally { c.release() } });
+app.get("/api/admin/applications", auth, allow("admin"), async (req, res, next) => {
+  try {
+    await ensureRegistrationSchema();
+
+    const rows = await q(
+      `
+      SELECT
+        id,
+        role,
+        name,
+        business_name,
+        business_category,
+        shop_type,
+        email,
+        phone,
+        location,
+        address,
+        tax_number,
+        license_number,
+        status,
+        created_at,
+        reviewed_at
+      FROM merchant_applications
+      ORDER BY id DESC
+      `
+    );
+
+    return res.json(rows);
+  } catch (error) {
+    next(error);
+  }
+});
+app.patch(
+  "/api/admin/applications/:id",
+  auth,
+  allow("admin"),
+  async (req, res, next) => {
+    const connection = await pool.getConnection();
+
+    try {
+      await ensureRegistrationSchema();
+
+      const applicationId = Number(req.params.id);
+      const status = String(req.body?.status || "").trim().toLowerCase();
+
+      if (!Number.isInteger(applicationId) || applicationId <= 0) {
+        return res.status(400).json({ message: "Invalid application." });
+      }
+
+      if (!["approved", "rejected"].includes(status)) {
+        return res.status(400).json({
+          message: "Status must be approved or rejected.",
+        });
+      }
+
+      await connection.beginTransaction();
+
+      const [[application]] = await connection.query(
+        `
+        SELECT *
+        FROM merchant_applications
+        WHERE id = ?
+        LIMIT 1
+        FOR UPDATE
+        `,
+        [applicationId]
+      );
+
+      if (!application) {
+        await connection.rollback();
+        return res.status(404).json({ message: "Application not found." });
+      }
+
+      if (application.status !== "pending") {
+        await connection.rollback();
+        return res.status(409).json({
+          message: "This application has already been processed.",
+        });
+      }
+
+      if (status === "approved") {
+        const [[existingUser]] = await connection.query(
+          `
+          SELECT id
+          FROM users
+          WHERE LOWER(email) = LOWER(?)
+          LIMIT 1
+          `,
+          [application.email]
+        );
+
+        if (existingUser) {
+          await connection.rollback();
+          return res.status(409).json({
+            message: "A user account already exists for this email.",
+          });
+        }
+
+        await connection.query(
+          `
+          INSERT INTO users
+          (
+            role,
+            name,
+            business_name,
+            business_category,
+            shop_type,
+            email,
+            phone,
+            location,
+            address,
+            tax_number,
+            license_number,
+            password_hash,
+            status,
+            verified_at
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', NOW())
+          `,
+          [
+            application.role,
+            application.name,
+            application.business_name,
+            application.business_category,
+            application.shop_type,
+            application.email,
+            application.phone,
+            application.location,
+            application.address,
+            application.tax_number,
+            application.license_number,
+            application.password_hash,
+          ]
+        );
+      }
+
+      await connection.query(
+        `
+        UPDATE merchant_applications
+        SET
+          status = ?,
+          reviewed_by = ?,
+          reviewed_at = NOW()
+        WHERE id = ?
+        `,
+        [status, req.user.id, applicationId]
+      );
+
+      await connection.commit();
+
+      return res.json({
+        message:
+          status === "approved"
+            ? "Merchant approved and account activated."
+            : "Merchant application rejected.",
+        application_id: applicationId,
+        status,
+      });
+    } catch (error) {
+      await connection.rollback();
+      console.error("REVIEW MERCHANT APPLICATION ERROR:", error);
+      next(error);
+    } finally {
+      connection.release();
+    }
+  }
+);
 app.get('/api/admin/users', auth, allow('admin'), async (req, res) => res.json(await q("SELECT id,business_name,role,name,phone,location,status,created_at FROM users WHERE role!='admin' ORDER BY id DESC")));
 app.get('/api/admin/orders', auth, allow('admin'), async (req, res) => res.json(await q(`SELECT o.id,o.order_no,r.business_name retailer_name,w.business_name wholesaler_name,o.status,o.total_amount,o.created_at FROM purchase_orders o JOIN users r ON r.id=o.retailer_id JOIN users w ON w.id=o.wholesaler_id ORDER BY o.id DESC`)));
 app.get('/api/admin/finance', auth, allow('admin'), async (req, res) => res.json(await q(`SELECT i.id,i.invoice_no,r.business_name retailer_name,w.business_name wholesaler_name,i.total_amount,i.paid_amount,i.status,i.due_date FROM invoices i JOIN users r ON r.id=i.retailer_id JOIN users w ON w.id=i.wholesaler_id ORDER BY i.id DESC`)));
