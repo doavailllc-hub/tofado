@@ -668,6 +668,8 @@ app.patch(
         });
       }
 
+      let approvedWholesalerUserId = null;
+
       if (status === "approved") {
         const [[existingUser]] = await connection.query(
           `
@@ -686,7 +688,7 @@ app.patch(
           });
         }
 
-        await connection.query(
+        const [createdUserResult] = await connection.query(
           `
           INSERT INTO users
           (
@@ -722,6 +724,10 @@ app.patch(
             application.password_hash,
           ]
         );
+
+        if (application.role === "wholesaler") {
+          approvedWholesalerUserId = Number(createdUserResult.insertId);
+        }
       }
 
       await connection.query(
@@ -737,6 +743,10 @@ app.patch(
       );
 
       await connection.commit();
+
+      if (approvedWholesalerUserId) {
+        await getOrCreateWholesaleCatalog(approvedWholesalerUserId);
+      }
 
       return res.json({
         message:
@@ -948,6 +958,41 @@ async function getOrCreateWholesaleCatalog(wholesalerId) {
 
   return createdCatalog;
 }
+
+
+let marketplaceCatalogSyncPromise = null;
+
+async function ensureMarketplaceCatalogsForApprovedWholesalers() {
+  if (marketplaceCatalogSyncPromise) {
+    return marketplaceCatalogSyncPromise;
+  }
+
+  marketplaceCatalogSyncPromise = (async () => {
+    const missingWholesalers = await q(
+      `
+      SELECT
+        u.id
+      FROM users u
+      LEFT JOIN wholesale_catalogs c
+        ON c.wholesaler_id = u.id
+      WHERE u.role = 'wholesaler'
+        AND u.status = 'active'
+        AND c.id IS NULL
+      ORDER BY u.id ASC
+      LIMIT 100
+      `
+    );
+
+    for (const wholesaler of missingWholesalers) {
+      await getOrCreateWholesaleCatalog(wholesaler.id);
+    }
+  })().finally(() => {
+    marketplaceCatalogSyncPromise = null;
+  });
+
+  return marketplaceCatalogSyncPromise;
+}
+
 
 app.get(
   "/api/wholesaler/catalog",
@@ -6858,6 +6903,7 @@ app.get(
   "/api/public/marketplace/home",
   async (_req, res, next) => {
     try {
+      await ensureMarketplaceCatalogsForApprovedWholesalers();
       const [categoryRows, featured, trending, newest, popularProducts, stats] =
         await Promise.all([
           q(`
@@ -6972,6 +7018,7 @@ app.get(
   "/api/public/marketplace/wholesalers",
   async (req, res, next) => {
     try {
+      await ensureMarketplaceCatalogsForApprovedWholesalers();
       const search = String(req.query.q || "").trim();
       const category = String(req.query.category || "").trim();
       const location = String(req.query.location || "").trim();
