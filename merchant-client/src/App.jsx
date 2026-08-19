@@ -13,7 +13,8 @@ import Dashboard from "./pages/Dashboard";
 import DataPage from "./pages/DataPage";
 import Profile from "./pages/Profile";
 import NewOrder from "./pages/NewOrder";
-
+import RetailerOrderDetails from "./pages/RetailerOrderDetails";
+import RetailerInvoiceDetails from "./pages/RetailerInvoiceDetails";
 import Catalog from "./pages/Catalog";
 import ProductForm from "./pages/ProductForm";
 import CatalogOrders from "./pages/CatalogOrders";
@@ -29,6 +30,10 @@ import InvoiceDetails from "./pages/InvoiceDetails";
 import PaymentList from "./pages/PaymentList";
 import RecordPayment from "./pages/RecordPayment";
 import PaymentDetails from "./pages/PaymentDetails";
+import RetailerWholesalers from "./pages/RetailerWholesalers";
+import RetailerConnectedWholesalers from "./pages/RetailerConnectedWholesalers";
+import RetailerWholesalerRequests from "./pages/RetailerWholesalerRequests";
+import WholesalerRetailerRequests from "./pages/WholesalerRetailerRequests";
 export default function App() {
   return (
     <Routes>
@@ -61,6 +66,32 @@ export default function App() {
           path="/retailer/invoices"
           element={<DataPage type="retailer-invoices" />}
         />
+        <Route
+          path="/retailer/invoices/:id"
+          element={<RetailerInvoiceDetails />}
+        />
+        <Route
+          path="/retailer/wholesalers"
+          element={<RetailerConnectedWholesalers />}
+        />
+
+        <Route
+          path="/retailer/wholesalers/find"
+          element={<RetailerWholesalers />}
+        />
+
+        <Route
+          path="/retailer/wholesaler-requests"
+          element={<RetailerWholesalerRequests />}
+        />
+<Route
+  path="/retailer/orders/new"
+  element={<NewOrder />}
+/>
+        <Route
+  path="/retailer/orders/:id"
+  element={<RetailerOrderDetails />}
+/>
         <Route
           path="/retailer/profile"
           element={<Profile />}
@@ -155,7 +186,10 @@ export default function App() {
   path="/wholesaler/payments"
   element={<PaymentList />}
 />
-
+<Route
+  path="/wholesaler/retailer-requests"
+  element={<WholesalerRetailerRequests />}
+/>
 <Route
   path="/wholesaler/payments/new"
   element={<RecordPayment />}

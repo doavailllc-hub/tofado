@@ -14,6 +14,8 @@ import {
   Store,
   Truck,
   Users,
+  UserPlus,
+  Clock3,
   Wallet,
   X,
 } from "lucide-react";
@@ -24,11 +26,57 @@ import "./Layout.css";
 
 const menus = {
   retailer: [
-    { label: "Dashboard", path: "/retailer", icon: LayoutDashboard, color: "blue", end: true },
-    { label: "New purchase list", path: "/retailer/new-order", icon: ShoppingCart, color: "amber" },
-    { label: "My orders", path: "/retailer/orders", icon: Package, color: "purple" },
-    { label: "Invoices & payments", path: "/retailer/invoices", icon: FileText, color: "pink" },
-    { label: "Shop profile", path: "/retailer/profile", icon: Store, color: "green" },
+    {
+      label: "Dashboard",
+      path: "/retailer",
+      icon: LayoutDashboard,
+      color: "blue",
+      end: true,
+    },
+    {
+      label: "Wholesalers",
+      icon: Users,
+      color: "green",
+      children: [
+        {
+          label: "Connected wholesalers",
+          path: "/retailer/wholesalers",
+          end: true,
+        },
+        {
+          label: "Find wholesalers",
+          path: "/retailer/wholesalers/find",
+        },
+        {
+          label: "Connection requests",
+          path: "/retailer/wholesaler-requests",
+        },
+      ],
+    },
+    {
+      label: "New purchase list",
+      path: "/retailer/new-order",
+      icon: ShoppingCart,
+      color: "amber",
+    },
+    {
+      label: "My orders",
+      path: "/retailer/orders",
+      icon: Package,
+      color: "purple",
+    },
+    {
+      label: "Invoices & payments",
+      path: "/retailer/invoices",
+      icon: FileText,
+      color: "pink",
+    },
+    {
+      label: "Shop profile",
+      path: "/retailer/profile",
+      icon: Store,
+      color: "green",
+    },
   ],
   wholesaler: [
     {
@@ -124,7 +172,7 @@ export default function Layout() {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [openMenu, setOpenMenu] = useState("Products");
+  const [openMenu, setOpenMenu] = useState("");
 
   const role = roleMeta[user?.role] || roleMeta.admin;
   const items = menus[user?.role] || [];
@@ -182,13 +230,15 @@ export default function Layout() {
             className="tf-brand-link"
             aria-label="Go to dashboard"
           >
-            <img
-              className="tf-brand-logo"
-              src={logo}
-              alt="Tofado Merchant"
-            />
-          </NavLink>
+            <span className="tf-brand-logo-wrap">
+              <img src={logo} alt="Tofado Merchant" />
+            </span>
 
+            <span className="tf-brand-copy">
+              <strong>Tofado</strong>
+              <small>Merchant workspace</small>
+            </span>
+          </NavLink>
           <button
             type="button"
             className="tf-icon-button tf-sidebar-close"
@@ -308,6 +358,7 @@ export default function Layout() {
               </span>
 
               <div className="tf-topbar-heading">
+                <span>Tofado Merchant</span>
                 <strong>{role.workspace}</strong>
               </div>
             </div>

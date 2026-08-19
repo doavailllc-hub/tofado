@@ -6400,6 +6400,58 @@ app.delete(
 // and authenticated retailer connection-request routes remain unchanged.
 // ============================================================
 
+const MARKETPLACE_CATEGORIES = [
+  "Grocery & FMCG",
+  "Food & Beverage",
+  "Pharmacy & Medical",
+  "Restaurant Supplies",
+  "Hotel Supplies",
+  "Building Materials",
+  "Construction",
+  "Industrial",
+  "Electronics",
+  "Automotive",
+  "Fashion & Apparel",
+  "Office Supplies",
+  "Cleaning & Hygiene",
+  "Packaging",
+  "Other",
+];
+
+function mergeMarketplaceCategories(rows = []) {
+  const counts = new Map(
+    rows.map((row) => [
+      String(row.name || "").trim(),
+      {
+        product_count: Number(row.product_count || 0),
+        wholesaler_count: Number(row.wholesaler_count || 0),
+      },
+    ])
+  );
+
+  const known = MARKETPLACE_CATEGORIES.map((name) => ({
+    name,
+    product_count: counts.get(name)?.product_count || 0,
+    wholesaler_count: counts.get(name)?.wholesaler_count || 0,
+  }));
+
+  const extras = rows
+    .filter(
+      (row) =>
+        row?.name &&
+        !MARKETPLACE_CATEGORIES.includes(
+          String(row.name).trim()
+        )
+    )
+    .map((row) => ({
+      name: String(row.name).trim(),
+      product_count: Number(row.product_count || 0),
+      wholesaler_count: Number(row.wholesaler_count || 0),
+    }));
+
+  return [...known, ...extras];
+}
+
 function marketplaceLimit(value, fallback = 12, maximum = 48) {
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed <= 0) return fallback;
@@ -6464,7 +6516,7 @@ app.get(
   "/api/public/marketplace/home",
   async (_req, res, next) => {
     try {
-      const [categories, featured, trending, newest, popularProducts, stats] =
+      const [categoryRows, featured, trending, newest, popularProducts, stats] =
         await Promise.all([
           q(`
             SELECT
@@ -6554,6 +6606,9 @@ app.get(
                   AND TRIM(p.category_name) <> '') AS categories
           `),
         ]);
+
+      const categories =
+        mergeMarketplaceCategories(categoryRows);
 
       return res.json({
         stats: stats[0] || { wholesalers: 0, products: 0, categories: 0 },
@@ -6687,7 +6742,7 @@ app.get(
   "/api/public/marketplace/categories",
   async (_req, res, next) => {
     try {
-      const categories = await q(`
+      const categoryRows = await q(`
         SELECT
           p.category_name AS name,
           COUNT(*) AS product_count,
@@ -6706,6 +6761,8 @@ app.get(
         GROUP BY p.category_name
         ORDER BY wholesaler_count DESC, product_count DESC, p.category_name ASC
       `);
+
+      const categories = mergeMarketplaceCategories(categoryRows);
 
       return res.json({ categories });
     } catch (error) {

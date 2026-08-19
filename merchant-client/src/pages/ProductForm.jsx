@@ -45,6 +45,24 @@ const units = [
   "tray",
   "bundle",
 ];
+const productCategories = [
+  "Grocery & FMCG",
+  "Food & Beverage",
+  "Pharmacy & Medical",
+  "Restaurant Supplies",
+  "Hotel Supplies",
+  "Building Materials",
+  "Construction",
+  "Industrial",
+  "Electronics",
+  "Automotive",
+  "Fashion & Apparel",
+  "Office Supplies",
+  "Cleaning & Hygiene",
+  "Packaging",
+  "Other"
+];
+
 
 export default function ProductForm() {
   const { id } = useParams();
@@ -133,6 +151,11 @@ export default function ProductForm() {
 
     if (!form.name.trim()) {
       setError("Product name is required.");
+      return;
+    }
+
+    if (!form.category_name.trim()) {
+      setError("Select a product category.");
       return;
     }
 
@@ -318,17 +341,41 @@ export default function ProductForm() {
                 <div className="product-form-control-icon">
                   <Tag size={17} />
 
-                  <input
+                  <select
+                    required
                     value={form.category_name}
-                    placeholder="Example: Rice & Grains"
                     onChange={(event) =>
                       updateField(
                         "category_name",
                         event.target.value
                       )
                     }
-                  />
+                  >
+                    <option value="">
+                      Select marketplace category
+                    </option>
+
+                    {form.category_name &&
+                      !productCategories.includes(
+                        form.category_name
+                      ) && (
+                        <option value={form.category_name}>
+                          {form.category_name} (existing)
+                        </option>
+                      )}
+
+                    {productCategories.map((category) => (
+                      <option value={category} key={category}>
+                        {category}
+                      </option>
+                    ))}
+                  </select>
                 </div>
+
+                <small className="product-form-help">
+                  Use the standard marketplace category so retailers
+                  can find this product correctly.
+                </small>
               </label>
 
               <label className="product-form-field">

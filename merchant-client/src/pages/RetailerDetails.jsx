@@ -28,7 +28,7 @@ import {
   Spinner,
   statusTone,
 } from "../components/UI";
-import "./RetailerDetails.css";
+import "./Retailer.css";
 
 const tabs = [
   {

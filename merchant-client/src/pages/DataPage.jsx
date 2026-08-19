@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import {
   ArrowDownUp,
   CheckCircle2,
+  ChevronRight,
   CircleDollarSign,
   Clock3,
   FileText,
@@ -11,6 +12,7 @@ import {
   MapPin,
   MessageSquarePlus,
   PackageCheck,
+  ReceiptText,
   Plus,
   RefreshCw,
   Search,
@@ -29,7 +31,8 @@ import {
   statusTone,
 } from "../components/UI";
 
-import "./DataPage-Professional.css";
+import "./Retailer.css";
+import "./DataPage.css";
 
 const configs = {
   "retailer-orders": {
@@ -397,6 +400,24 @@ function getRowIcon(type) {
   return ShoppingCart;
 }
 
+function isAwaitingQuote(row, type) {
+  return (
+    type === "retailer-orders" &&
+    Number(row.total_amount || 0) <= 0 &&
+    ["pending", "confirmed"].includes(
+      String(row.status || "").toLowerCase()
+    )
+  );
+}
+
+function retailerOrderAmount(row) {
+  if (isAwaitingQuote(row, "retailer-orders")) {
+    return "Awaiting quotation";
+  }
+
+  return formatValue("total_amount", row.total_amount);
+}
+
 export default function DataPage({ type }) {
   const navigate = useNavigate();
   const config = configs[type];
@@ -436,6 +457,10 @@ const openRow = (row) => {
       navigate(`/retailer/orders/${row.id}`);
       break;
 
+    case "retailer-invoices":
+      navigate(`/retailer/invoices/${row.id}`);
+      break;
+
     default:
       break;
   }
@@ -449,7 +474,24 @@ const openRow = (row) => {
       setError("");
 
       const response = await api.get(config.url);
-      setRows(response.data || []);
+      const payload = response.data;
+      const normalizedRows = Array.isArray(payload)
+        ? payload
+        : Array.isArray(payload?.rows)
+          ? payload.rows
+          : Array.isArray(payload?.orders)
+            ? payload.orders
+            : Array.isArray(payload?.invoices)
+              ? payload.invoices
+              : Array.isArray(payload?.payments)
+                ? payload.payments
+                : Array.isArray(payload?.deliveries)
+                  ? payload.deliveries
+                  : Array.isArray(payload?.retailers)
+                    ? payload.retailers
+                    : [];
+
+      setRows(normalizedRows);
     } catch (requestError) {
       setError(
         requestError.response?.data?.message ||
@@ -584,7 +626,9 @@ const openRow = (row) => {
           row.outstanding ||
           0;
 
-        result.value += Number(amount) || 0;
+        if (!isAwaitingQuote(row, type)) {
+          result.value += Number(amount) || 0;
+        }
 
         return result;
       },
@@ -595,7 +639,7 @@ const openRow = (row) => {
         value: 0,
       }
     );
-  }, [rows]);
+  }, [rows, type]);
 
   if (!config) {
     return (
@@ -628,24 +672,13 @@ const openRow = (row) => {
     <div className="retailer-header-actions">
       <button
         type="button"
-        className="retailer-secondary-action"
-        onClick={() =>
-          navigate("/wholesaler/retailers/from-enquiry")
-        }
-      >
-        <MessageSquarePlus size={17} />
-        Add from enquiry
-      </button>
-
-      <button
-        type="button"
         className="retailer-primary-action"
         onClick={() =>
-          navigate("/wholesaler/retailers/new")
+          navigate("/wholesaler/retailer-requests")
         }
       >
-        <Plus size={17} />
-        Add retailer
+        <Users size={17} />
+        Retailer requests
       </button>
     </div>
   ) : (
@@ -798,6 +831,9 @@ const openRow = (row) => {
                       ))}
 
                       {config.actions && <th>Update status</th>}
+                      {type === "retailer-orders" && (
+                        <th aria-label="Open order" />
+                      )}
                     </tr>
                   </thead>
 
@@ -813,11 +849,30 @@ className={
     "wholesaler-deliveries",
     "wholesaler-orders",
     "retailer-orders",
+    "retailer-invoices",
   ].includes(type)
     ? "data-clickable-row"
     : ""
 }
   onClick={() => openRow(row)}
+  onKeyDown={(event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      openRow(row);
+    }
+  }}
+  tabIndex={
+    [
+      "wholesaler-retailers",
+      "wholesaler-invoices",
+      "wholesaler-payments",
+      "wholesaler-deliveries",
+      "wholesaler-orders",
+      "retailer-orders",
+    ].includes(type)
+      ? 0
+      : -1
+  }
 >
                         {config.cols.map((column, columnIndex) => (
                           <td key={column}>
@@ -858,24 +913,30 @@ className={
                             ) : (
                               <span
                                 className={
-                                  isAmountKey(column)
-                                    ? "data-amount"
-                                    : isDateKey(column)
-                                      ? "data-date"
-                                      : ""
+                                  column === "total_amount" &&
+                                  isAwaitingQuote(row, type)
+                                    ? "data-quote-value"
+                                    : isAmountKey(column)
+                                      ? "data-amount"
+                                      : isDateKey(column)
+                                        ? "data-date"
+                                        : ""
                                 }
                               >
-                                {formatValue(
-                                  column,
-                                  row[column]
-                                )}
+                                {column === "total_amount" &&
+                                type === "retailer-orders"
+                                  ? retailerOrderAmount(row)
+                                  : formatValue(
+                                      column,
+                                      row[column]
+                                    )}
                               </span>
                             )}
                           </td>
                         ))}
 
                         {config.actions && (
-                          <td>
+                          <td onClick={(event) => event.stopPropagation()}>
                             <div className="status-update-control">
                               <select
                                 value={row.status}
@@ -901,6 +962,11 @@ className={
                                 <span className="status-loading-dot" />
                               )}
                             </div>
+                          </td>
+                        )}
+                        {type === "retailer-orders" && (
+                          <td className="retailer-order-open-cell">
+                            <ChevronRight size={18} />
                           </td>
                         )}
                       </tr>
@@ -959,11 +1025,21 @@ className={
                         <div key={column}>
                           <span>{label(column)}</span>
                           <strong>
-                            {formatValue(column, row[column])}
+                            {column === "total_amount" &&
+                            type === "retailer-orders"
+                              ? retailerOrderAmount(row)
+                              : formatValue(column, row[column])}
                           </strong>
                         </div>
                       ))}
                   </div>
+
+                  {type === "retailer-orders" && (
+                    <div className="retailer-mobile-open">
+                      <span>View order details</span>
+                      <ChevronRight size={17} />
+                    </div>
+                  )}
 
                   {config.actions && (
                     <div className="data-mobile-action">

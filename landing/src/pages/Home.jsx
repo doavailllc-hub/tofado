@@ -30,14 +30,21 @@ const merchantBaseUrl = merchantAppUrl
   .replace(/\/+$/, "");
 
 const fallbackCategories = [
-  "Grocery",
+  "Grocery & FMCG",
   "Food & Beverage",
-  "Pharmacy",
+  "Pharmacy & Medical",
   "Restaurant Supplies",
   "Hotel Supplies",
+  "Building Materials",
   "Construction",
   "Industrial",
   "Electronics",
+  "Automotive",
+  "Fashion & Apparel",
+  "Office Supplies",
+  "Cleaning & Hygiene",
+  "Packaging",
+  "Other"
 ];
 
 const categoryIcons = ["🛒", "🥤", "💊", "🍽️", "🏨", "🏗️", "🏭", "💻", "📦", "🧴"];
@@ -214,8 +221,13 @@ export default function Home() {
   }, []);
 
   const categories = useMemo(() => {
-    const real = home.categories.map((item) => item?.name).filter(Boolean);
-    return real.length ? real.slice(0, 10) : fallbackCategories;
+    const real = home.categories
+      .map((item) => item?.name)
+      .filter(Boolean);
+
+    return Array.from(
+      new Set([...fallbackCategories, ...real])
+    );
   }, [home.categories]);
 
   async function searchMarketplace(event, category = "") {

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
   Building2,
@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 
 import api from "../services/api";
+import "./Retailer.css";
 
 const createEmptyItem = () => ({
   product_name: "",
@@ -41,6 +42,7 @@ const units = [
 
 export default function NewOrder() {
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [wholesalers, setWholesalers] = useState([]);
   const [loadingDealers, setLoadingDealers] = useState(true);
@@ -61,9 +63,33 @@ export default function NewOrder() {
     async function loadWholesalers() {
       try {
         const response = await api.get("/retailer/wholesalers");
+        const rows = Array.isArray(response.data)
+          ? response.data
+          : Array.isArray(response.data?.wholesalers)
+            ? response.data.wholesalers
+            : Array.isArray(response.data?.rows)
+              ? response.data.rows
+              : [];
 
         if (active) {
-          setWholesalers(response.data || []);
+          setWholesalers(rows);
+
+          const params = new URLSearchParams(location.search);
+          const requestedWholesaler =
+            params.get("wholesaler") || params.get("dealer");
+
+          if (
+            requestedWholesaler &&
+            rows.some(
+              (dealer) =>
+                String(dealer.id) === String(requestedWholesaler)
+            )
+          ) {
+            setForm((current) => ({
+              ...current,
+              wholesaler_id: String(requestedWholesaler),
+            }));
+          }
         }
       } catch (requestError) {
         if (active) {
@@ -84,7 +110,7 @@ export default function NewOrder() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [location.search]);
 
   const selectedWholesaler = useMemo(
     () =>
@@ -109,7 +135,28 @@ export default function NewOrder() {
     [form.items]
   );
 
+  const canSubmit = useMemo(() => {
+    const hasValidItem = form.items.some(
+      (item) =>
+        item.product_name.trim() &&
+        Number(item.quantity) > 0
+    );
+
+    return Boolean(
+      form.wholesaler_id &&
+      form.delivery_address.trim() &&
+      hasValidItem &&
+      !submitting
+    );
+  }, [
+    form.wholesaler_id,
+    form.delivery_address,
+    form.items,
+    submitting,
+  ]);
+
   const updateForm = (key, value) => {
+    if (error) setError("");
     setForm((current) => ({
       ...current,
       [key]: value,
@@ -117,6 +164,7 @@ export default function NewOrder() {
   };
 
   const updateItem = (index, key, value) => {
+    if (error) setError("");
     setForm((current) => ({
       ...current,
       items: current.items.map((item, itemIndex) =>
@@ -193,16 +241,23 @@ export default function NewOrder() {
       setSubmitting(true);
 
       await api.post("/retailer/orders", {
-        ...form,
+        wholesaler_id: Number(form.wholesaler_id),
+        delivery_address: form.delivery_address.trim(),
+        required_date: form.required_date || null,
+        notes: form.notes.trim(),
         items: validItems.map((item) => ({
-          ...item,
           product_name: item.product_name.trim(),
           quantity: Number(item.quantity),
+          unit: item.unit,
           notes: item.notes.trim(),
         })),
       });
 
-      navigate("/retailer/orders");
+      navigate("/retailer/orders", {
+        state: {
+          message: "Purchase list sent successfully.",
+        },
+      });
     } catch (requestError) {
       setError(
         requestError.response?.data?.message ||
@@ -234,8 +289,7 @@ export default function NewOrder() {
             <h1>Create purchase list</h1>
 
             <p>
-              Add grocery requirements and send them directly to a
-              verified wholesale dealer.
+              Create a purchase list for a wholesaler connected to your business.
             </p>
           </div>
 
@@ -257,7 +311,7 @@ export default function NewOrder() {
                 <span>Step 1</span>
                 <h2>Wholesale dealer</h2>
                 <p>
-                  Choose the verified wholesaler receiving this list.
+                  Only wholesalers who accepted your connection request can receive orders.
                 </p>
               </div>
             </div>
@@ -288,7 +342,7 @@ export default function NewOrder() {
 
                     {wholesalers.map((dealer) => (
                       <option value={dealer.id} key={dealer.id}>
-                        {dealer.business_name} — {dealer.location}
+                        {dealer.business_name || dealer.name || `Wholesaler ${dealer.id}`} — {dealer.location || "Location not provided"}
                       </option>
                     ))}
                   </select>
@@ -297,6 +351,25 @@ export default function NewOrder() {
                 </div>
               </label>
 
+              {!loadingDealers && wholesalers.length === 0 && (
+                <div className="new-order-network-empty">
+                  <Store size={20} />
+                  <div>
+                    <strong>No connected wholesalers yet</strong>
+                    <p>
+                      Find verified wholesalers and send a connection request.
+                      You can order after the wholesaler accepts.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => navigate("/retailer/wholesalers/find")}
+                  >
+                    Find wholesalers
+                  </button>
+                </div>
+              )}
+
               <label className="new-order-field">
                 <span>Required delivery date</span>
 
@@ -304,6 +377,7 @@ export default function NewOrder() {
                   <CalendarDays size={18} />
 
                   <input
+                    required
                     type="date"
                     min={new Date().toISOString().split("T")[0]}
                     value={form.required_date}
@@ -346,7 +420,7 @@ export default function NewOrder() {
                 </div>
 
                 <div>
-                  <span>Selected verified dealer</span>
+                  <span>Connected wholesaler</span>
                   <strong>
                     {selectedWholesaler.business_name}
                   </strong>
@@ -591,7 +665,7 @@ export default function NewOrder() {
             <button
               type="submit"
               className="new-order-submit"
-              disabled={submitting}
+              disabled={!canSubmit}
             >
               {submitting ? (
                 <>
