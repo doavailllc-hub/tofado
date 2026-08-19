@@ -5115,6 +5115,1683 @@ app.patch(
     }
   }
 );
+// ======================================================
+// RETAILER: GET FULL ORDER DETAILS
+// GET /api/retailer/orders/:id
+// Add BEFORE final 404 handler and app.listen()
+// ======================================================
+
+app.get(
+  "/api/retailer/orders/:id",
+  auth,
+  allow("retailer"),
+  async (req, res, next) => {
+    try {
+      const orderId = Number(req.params.id);
+      const retailerId = Number(req.user.id);
+
+      if (!Number.isInteger(orderId) || orderId <= 0) {
+        return res.status(400).json({
+          message: "Invalid order ID.",
+        });
+      }
+
+      const orders = await q(
+        `
+        SELECT
+          o.id,
+          o.order_no,
+          o.retailer_id,
+          o.wholesaler_id,
+          o.delivery_address,
+          o.required_date,
+          o.notes,
+          o.status,
+          o.total_amount,
+          o.created_at,
+          o.updated_at,
+
+          w.business_name AS wholesaler_name,
+          w.name AS wholesaler_contact,
+          w.phone AS wholesaler_phone,
+          w.email AS wholesaler_email,
+          w.location AS wholesaler_location
+
+        FROM purchase_orders o
+
+        INNER JOIN users w
+          ON w.id = o.wholesaler_id
+          AND w.role = 'wholesaler'
+
+        WHERE o.id = ?
+          AND o.retailer_id = ?
+
+        LIMIT 1
+        `,
+        [orderId, retailerId]
+      );
+
+      if (!orders.length) {
+        return res.status(404).json({
+          message: "Order not found.",
+        });
+      }
+
+      const order = orders[0];
+
+      const items = await q(
+        `
+        SELECT
+          id,
+          order_id,
+          product_name,
+          quantity,
+          unit,
+          unit_price,
+          notes,
+
+          CASE
+            WHEN unit_price IS NULL THEN NULL
+            ELSE quantity * unit_price
+          END AS line_total
+
+        FROM purchase_order_items
+
+        WHERE order_id = ?
+
+        ORDER BY id ASC
+        `,
+        [orderId]
+      );
+
+      let invoice = null;
+      let delivery = null;
+
+      // Invoice lookup — supports your existing purchase-order invoice table
+      try {
+        const invoiceRows = await q(
+          `
+          SELECT *
+          FROM wholesale_invoices
+          WHERE order_id = ?
+            AND retailer_id = ?
+          ORDER BY id DESC
+          LIMIT 1
+          `,
+          [orderId, retailerId]
+        );
+
+        invoice = invoiceRows[0] || null;
+      } catch (invoiceError) {
+        // Keep order details usable even if invoice table/columns differ.
+        console.warn(
+          "RETAILER ORDER INVOICE LOOKUP SKIPPED:",
+          invoiceError.message
+        );
+      }
+
+      // Delivery lookup — purchase order delivery records
+      try {
+        const deliveryRows = await q(
+          `
+          SELECT *
+          FROM wholesale_deliveries
+          WHERE order_id = ?
+          ORDER BY id DESC
+          LIMIT 1
+          `,
+          [orderId]
+        );
+
+        delivery = deliveryRows[0] || null;
+      } catch (deliveryError) {
+        console.warn(
+          "RETAILER ORDER DELIVERY LOOKUP SKIPPED:",
+          deliveryError.message
+        );
+      }
+
+      return res.json({
+        order,
+        items,
+        invoice,
+        delivery,
+      });
+    } catch (error) {
+      console.error("LOAD RETAILER ORDER DETAILS ERROR:", error);
+      next(error);
+    }
+  }
+);
+
+
+app.get(
+  "/api/retailer/orders/:id",
+  auth,
+  allow("retailer"),
+  async (req, res, next) => {
+    try {
+      const orderId = Number(req.params.id);
+      const retailerId = Number(req.user.id);
+
+      if (!Number.isInteger(orderId) || orderId <= 0) {
+        return res.status(400).json({
+          message: "Invalid order ID.",
+        });
+      }
+
+      const orders = await q(
+        `
+        SELECT
+          o.id,
+          o.order_no,
+          o.retailer_id,
+          o.wholesaler_id,
+          o.delivery_address,
+          o.required_date,
+          o.notes,
+          o.status,
+          o.total_amount,
+          o.created_at,
+          o.updated_at,
+
+          w.business_name AS wholesaler_name,
+          w.name AS wholesaler_contact,
+          w.phone AS wholesaler_phone,
+          w.email AS wholesaler_email,
+          w.location AS wholesaler_location
+
+        FROM purchase_orders o
+
+        INNER JOIN users w
+          ON w.id = o.wholesaler_id
+         AND w.role = 'wholesaler'
+
+        WHERE o.id = ?
+          AND o.retailer_id = ?
+
+        LIMIT 1
+        `,
+        [orderId, retailerId]
+      );
+
+      if (!orders.length) {
+        return res.status(404).json({
+          message:
+            "Order not found or it does not belong to your retailer account.",
+        });
+      }
+
+      const order = orders[0];
+
+      const items = await q(
+        `
+        SELECT
+          poi.id,
+          poi.order_id,
+          poi.product_name,
+          poi.quantity,
+          poi.unit,
+          poi.unit_price,
+          poi.notes,
+
+          CASE
+            WHEN poi.unit_price IS NULL
+              OR poi.unit_price <= 0
+            THEN NULL
+            ELSE poi.quantity * poi.unit_price
+          END AS line_total
+
+        FROM purchase_order_items poi
+
+        WHERE poi.order_id = ?
+
+        ORDER BY poi.id ASC
+        `,
+        [orderId]
+      );
+
+      let invoice = null;
+
+      try {
+        const invoiceRows = await q(
+          `
+          SELECT *
+          FROM wholesale_invoices
+          WHERE order_id = ?
+          ORDER BY id DESC
+          LIMIT 1
+          `,
+          [orderId]
+        );
+
+        invoice = invoiceRows[0] || null;
+      } catch (invoiceError) {
+        console.warn(
+          "RETAILER ORDER INVOICE LOOKUP SKIPPED:",
+          invoiceError.message
+        );
+      }
+
+      let delivery = null;
+
+      try {
+        const deliveryRows = await q(
+          `
+          SELECT
+            d.id,
+            CONCAT('DEL-', LPAD(d.id, 6, '0'))
+              AS delivery_no,
+            d.order_id,
+            d.wholesaler_id,
+            d.delivery_type,
+            d.delivery_notes,
+            d.status,
+            d.driver_name,
+            d.driver_phone,
+            d.vehicle_number,
+            d.packed_at,
+            d.ready_at,
+            d.dispatched_at,
+            d.out_for_delivery_at,
+            d.delivered_at,
+            d.created_at,
+            d.updated_at
+
+          FROM wholesale_catalog_deliveries d
+
+          WHERE d.order_id = ?
+            AND d.wholesaler_id = ?
+
+          ORDER BY d.id DESC
+          LIMIT 1
+          `,
+          [orderId, order.wholesaler_id]
+        );
+
+        delivery = deliveryRows[0] || null;
+      } catch (deliveryError) {
+        console.warn(
+          "RETAILER ORDER DELIVERY LOOKUP SKIPPED:",
+          deliveryError.message
+        );
+      }
+
+      return res.json({
+        order,
+        items,
+        invoice,
+        delivery,
+      });
+    } catch (error) {
+      console.error(
+        "LOAD RETAILER ORDER DETAILS ERROR:",
+        error
+      );
+
+      next(error);
+    }
+  }
+);
+
+// ============================================================
+// RETAILER INVOICE DETAILS + PAYMENT WORKFLOW
+// Add BEFORE your final 404 handler and app.listen()
+// Requires: auth, allow(), q(), pool
+// Tables:
+//   wholesale_catalog_invoices
+//   purchase_orders
+//   purchase_order_items
+//   payments
+// ============================================================
+
+// ------------------------------------------------------------
+// RETAILER: INVOICE DETAILS
+// GET /api/retailer/invoices/:id
+// ------------------------------------------------------------
+app.get(
+  "/api/retailer/invoices/:id",
+  auth,
+  allow("retailer"),
+  async (req, res, next) => {
+    try {
+      const retailerId = Number(req.user.id);
+      const invoiceId = Number(req.params.id);
+
+      if (!Number.isInteger(invoiceId) || invoiceId <= 0) {
+        return res.status(400).json({
+          message: "Invalid invoice ID.",
+        });
+      }
+
+      const invoices = await q(
+        `
+        SELECT
+          i.id,
+          i.invoice_no,
+          i.order_id,
+          i.wholesaler_id,
+          i.customer_name,
+          i.business_name,
+          i.phone,
+          i.email,
+          i.total_amount,
+          i.payment_type,
+          i.payment_status,
+          i.payment_due_date,
+          i.paid_at,
+          i.status,
+          i.created_at,
+          i.updated_at,
+
+          po.order_no,
+          po.retailer_id,
+          po.delivery_address,
+          po.required_date,
+          po.notes AS order_notes,
+          po.status AS order_status,
+          po.subtotal,
+          po.tax_amount,
+          po.total_amount AS order_total_amount,
+          po.delivered_at,
+
+          w.business_name AS wholesaler_name,
+          w.name AS wholesaler_contact_name,
+          w.phone AS wholesaler_phone,
+          w.email AS wholesaler_email,
+          w.location AS wholesaler_location,
+          w.address AS wholesaler_address,
+          w.logo_url AS wholesaler_logo_url
+
+        FROM wholesale_catalog_invoices i
+
+        INNER JOIN purchase_orders po
+          ON po.id = i.order_id
+
+        INNER JOIN users w
+          ON w.id = i.wholesaler_id
+         AND w.role = 'wholesaler'
+
+        WHERE i.id = ?
+          AND po.retailer_id = ?
+
+        LIMIT 1
+        `,
+        [invoiceId, retailerId]
+      );
+
+      const invoice = invoices[0];
+
+      if (!invoice) {
+        return res.status(404).json({
+          message: "Invoice not found.",
+        });
+      }
+
+      const items = await q(
+        `
+        SELECT
+          id,
+          order_id,
+          product_name,
+          quantity,
+          unit,
+          unit_price,
+          notes,
+          ROUND(
+            COALESCE(quantity, 0) * COALESCE(unit_price, 0),
+            2
+          ) AS line_total
+        FROM purchase_order_items
+        WHERE order_id = ?
+        ORDER BY id ASC
+        `,
+        [invoice.order_id]
+      );
+
+      const payments = await q(
+        `
+        SELECT
+          id,
+          payment_no,
+          invoice_id,
+          retailer_id,
+          wholesaler_id,
+          amount,
+          method,
+          reference_no,
+          status,
+          paid_at,
+          created_at
+        FROM payments
+        WHERE invoice_id = ?
+          AND retailer_id = ?
+        ORDER BY id DESC
+        `,
+        [invoiceId, retailerId]
+      );
+
+      const paidAmount = payments.reduce(
+        (sum, payment) =>
+          payment.status === "paid"
+            ? sum + Number(payment.amount || 0)
+            : sum,
+        0
+      );
+
+      const pendingAmount = payments.reduce(
+        (sum, payment) =>
+          payment.status === "pending"
+            ? sum + Number(payment.amount || 0)
+            : sum,
+        0
+      );
+
+      const totalAmount = Number(invoice.total_amount || 0);
+      const outstandingAmount = Math.max(
+        totalAmount - paidAmount,
+        0
+      );
+
+      let calculatedPaymentStatus =
+        String(invoice.payment_status || "pending").toLowerCase();
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const dueDate = invoice.payment_due_date
+        ? new Date(invoice.payment_due_date)
+        : null;
+
+      if (outstandingAmount <= 0 && totalAmount > 0) {
+        calculatedPaymentStatus = "paid";
+      } else if (paidAmount > 0) {
+        calculatedPaymentStatus = "partial";
+      } else if (
+        dueDate &&
+        !Number.isNaN(dueDate.getTime()) &&
+        dueDate < today
+      ) {
+        calculatedPaymentStatus = "overdue";
+      } else {
+        calculatedPaymentStatus = "pending";
+      }
+
+      return res.json({
+        invoice: {
+          ...invoice,
+          paid_amount: Number(paidAmount.toFixed(2)),
+          pending_payment_amount: Number(
+            pendingAmount.toFixed(2)
+          ),
+          outstanding_amount: Number(
+            outstandingAmount.toFixed(2)
+          ),
+          calculated_payment_status: calculatedPaymentStatus,
+        },
+        items,
+        payments,
+      });
+    } catch (error) {
+      console.error("LOAD RETAILER INVOICE DETAILS ERROR:", error);
+      next(error);
+    }
+  }
+);
+
+// ------------------------------------------------------------
+// RETAILER: SUBMIT PAYMENT FOR VERIFICATION
+// POST /api/retailer/invoices/:id/payments
+// body:
+// {
+//   amount: 772,
+//   method: "bank_transfer",
+//   reference_no: "TRX-123"
+// }
+// ------------------------------------------------------------
+app.post(
+  "/api/retailer/invoices/:id/payments",
+  auth,
+  allow("retailer"),
+  async (req, res, next) => {
+    const connection = await pool.getConnection();
+
+    try {
+      const retailerId = Number(req.user.id);
+      const invoiceId = Number(req.params.id);
+
+      const amount = Number(req.body?.amount);
+      const method = String(req.body?.method || "")
+        .trim()
+        .toLowerCase();
+
+      const referenceNo =
+        String(req.body?.reference_no || "")
+          .trim()
+          .slice(0, 120) || null;
+
+      const allowedMethods = [
+        "cash",
+        "bank_transfer",
+        "card",
+        "credit",
+      ];
+
+      if (!Number.isInteger(invoiceId) || invoiceId <= 0) {
+        return res.status(400).json({
+          message: "Invalid invoice ID.",
+        });
+      }
+
+      if (!Number.isFinite(amount) || amount <= 0) {
+        return res.status(400).json({
+          message: "Enter a valid payment amount.",
+        });
+      }
+
+      if (!allowedMethods.includes(method)) {
+        return res.status(400).json({
+          message: "Select a valid payment method.",
+        });
+      }
+
+      if (
+        ["bank_transfer", "card"].includes(method) &&
+        !referenceNo
+      ) {
+        return res.status(400).json({
+          message:
+            "Payment reference is required for bank transfer or card payment.",
+        });
+      }
+
+      await connection.beginTransaction();
+
+      const [[invoice]] = await connection.query(
+        `
+        SELECT
+          i.id,
+          i.invoice_no,
+          i.wholesaler_id,
+          i.total_amount,
+          i.status,
+          po.retailer_id
+        FROM wholesale_catalog_invoices i
+        INNER JOIN purchase_orders po
+          ON po.id = i.order_id
+        WHERE i.id = ?
+          AND po.retailer_id = ?
+        LIMIT 1
+        FOR UPDATE
+        `,
+        [invoiceId, retailerId]
+      );
+
+      if (!invoice) {
+        await connection.rollback();
+        return res.status(404).json({
+          message: "Invoice not found.",
+        });
+      }
+
+      if (invoice.status === "cancelled") {
+        await connection.rollback();
+        return res.status(409).json({
+          message: "Payments cannot be submitted for a cancelled invoice.",
+        });
+      }
+
+      const [[paymentTotals]] = await connection.query(
+        `
+        SELECT
+          COALESCE(
+            SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END),
+            0
+          ) AS paid_amount,
+          COALESCE(
+            SUM(CASE WHEN status = 'pending' THEN amount ELSE 0 END),
+            0
+          ) AS pending_amount
+        FROM payments
+        WHERE invoice_id = ?
+          AND retailer_id = ?
+        `,
+        [invoiceId, retailerId]
+      );
+
+      const totalAmount = Number(invoice.total_amount || 0);
+      const paidAmount = Number(paymentTotals?.paid_amount || 0);
+      const pendingAmount = Number(
+        paymentTotals?.pending_amount || 0
+      );
+
+      const availableOutstanding = Math.max(
+        totalAmount - paidAmount - pendingAmount,
+        0
+      );
+
+      if (availableOutstanding <= 0) {
+        await connection.rollback();
+        return res.status(409).json({
+          message:
+            pendingAmount > 0
+              ? "The remaining invoice balance already has a payment awaiting verification."
+              : "This invoice has already been fully paid.",
+        });
+      }
+
+      if (amount > availableOutstanding + 0.001) {
+        await connection.rollback();
+        return res.status(400).json({
+          message: `Payment cannot exceed the available outstanding amount of SAR ${availableOutstanding.toFixed(
+            2
+          )}.`,
+        });
+      }
+
+      const paymentNo =
+        `PAY-${Date.now().toString().slice(-10)}-${Math.floor(
+          100 + Math.random() * 900
+        )}`;
+
+      const [result] = await connection.query(
+        `
+        INSERT INTO payments
+        (
+          payment_no,
+          invoice_id,
+          retailer_id,
+          wholesaler_id,
+          amount,
+          method,
+          reference_no,
+          status,
+          paid_at,
+          created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', NULL, CURRENT_TIMESTAMP)
+        `,
+        [
+          paymentNo,
+          invoiceId,
+          retailerId,
+          Number(invoice.wholesaler_id),
+          amount,
+          method,
+          referenceNo,
+        ]
+      );
+
+      await connection.commit();
+
+      return res.status(201).json({
+        message:
+          "Payment submitted. It will be reflected in the invoice after wholesaler verification.",
+        payment: {
+          id: result.insertId,
+          payment_no: paymentNo,
+          invoice_id: invoiceId,
+          amount,
+          method,
+          reference_no: referenceNo,
+          status: "pending",
+        },
+      });
+    } catch (error) {
+      await connection.rollback();
+      console.error("SUBMIT RETAILER PAYMENT ERROR:", error);
+      next(error);
+    } finally {
+      connection.release();
+    }
+  }
+);
+
+// ------------------------------------------------------------
+// WHOLESALER: VERIFY / REJECT RETAILER PAYMENT
+// PATCH /api/wholesaler/payments/:id/verify
+// body: { action: "approve" | "reject" }
+// ------------------------------------------------------------
+app.patch(
+  "/api/wholesaler/payments/:id/verify",
+  auth,
+  allow("wholesaler"),
+  async (req, res, next) => {
+    const connection = await pool.getConnection();
+
+    try {
+      const wholesalerId = Number(req.user.id);
+      const paymentId = Number(req.params.id);
+      const action = String(req.body?.action || "")
+        .trim()
+        .toLowerCase();
+
+      if (!Number.isInteger(paymentId) || paymentId <= 0) {
+        return res.status(400).json({
+          message: "Invalid payment ID.",
+        });
+      }
+
+      if (!["approve", "reject"].includes(action)) {
+        return res.status(400).json({
+          message: "Action must be approve or reject.",
+        });
+      }
+
+      await connection.beginTransaction();
+
+      const [[payment]] = await connection.query(
+        `
+        SELECT *
+        FROM payments
+        WHERE id = ?
+          AND wholesaler_id = ?
+        LIMIT 1
+        FOR UPDATE
+        `,
+        [paymentId, wholesalerId]
+      );
+
+      if (!payment) {
+        await connection.rollback();
+        return res.status(404).json({
+          message: "Payment not found.",
+        });
+      }
+
+      if (payment.status !== "pending") {
+        await connection.rollback();
+        return res.status(409).json({
+          message: "This payment has already been processed.",
+        });
+      }
+
+      const nextPaymentStatus =
+        action === "approve" ? "paid" : "failed";
+
+      await connection.query(
+        `
+        UPDATE payments
+        SET
+          status = ?,
+          paid_at =
+            CASE
+              WHEN ? = 'paid' THEN CURRENT_TIMESTAMP
+              ELSE NULL
+            END
+        WHERE id = ?
+          AND wholesaler_id = ?
+        `,
+        [
+          nextPaymentStatus,
+          nextPaymentStatus,
+          paymentId,
+          wholesalerId,
+        ]
+      );
+
+      const [[invoice]] = await connection.query(
+        `
+        SELECT id, total_amount
+        FROM wholesale_catalog_invoices
+        WHERE id = ?
+          AND wholesaler_id = ?
+        LIMIT 1
+        FOR UPDATE
+        `,
+        [payment.invoice_id, wholesalerId]
+      );
+
+      if (invoice) {
+        const [[totals]] = await connection.query(
+          `
+          SELECT
+            COALESCE(
+              SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END),
+              0
+            ) AS paid_amount
+          FROM payments
+          WHERE invoice_id = ?
+          `,
+          [invoice.id]
+        );
+
+        const paidAmount = Number(totals?.paid_amount || 0);
+        const invoiceTotal = Number(invoice.total_amount || 0);
+
+        const nextInvoicePaymentStatus =
+          paidAmount >= invoiceTotal && invoiceTotal > 0
+            ? "paid"
+            : paidAmount > 0
+              ? "partial"
+              : "pending";
+
+        await connection.query(
+          `
+          UPDATE wholesale_catalog_invoices
+          SET
+            payment_status = ?,
+            paid_at =
+              CASE
+                WHEN ? = 'paid'
+                THEN COALESCE(paid_at, CURRENT_TIMESTAMP)
+                ELSE NULL
+              END,
+            updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+            AND wholesaler_id = ?
+          `,
+          [
+            nextInvoicePaymentStatus,
+            nextInvoicePaymentStatus,
+            invoice.id,
+            wholesalerId,
+          ]
+        );
+      }
+
+      await connection.commit();
+
+      return res.json({
+        message:
+          action === "approve"
+            ? "Payment verified successfully."
+            : "Payment rejected.",
+        payment_id: paymentId,
+        status: nextPaymentStatus,
+      });
+    } catch (error) {
+      await connection.rollback();
+      console.error("VERIFY PAYMENT ERROR:", error);
+      next(error);
+    } finally {
+      connection.release();
+    }
+  }
+);
+
+// ============================================================
+// RETAILER: SEARCH VERIFIED WHOLESALERS
+// GET /api/retailer/wholesalers/search?q=
+// ============================================================
+
+app.get(
+  "/api/retailer/wholesalers/search",
+  auth,
+  allow("retailer"),
+  async (req, res, next) => {
+    try {
+      const retailerId = Number(req.user.id);
+      const search = String(req.query.q || "").trim();
+
+      const like = `%${search}%`;
+
+      const wholesalers = await q(
+        `
+        SELECT
+          u.id,
+          u.business_name,
+          u.name,
+          u.phone,
+          u.email,
+          u.location,
+          u.address,
+          u.logo_url,
+          u.business_category,
+          u.shop_type,
+          u.description,
+
+          wr.id AS connection_id,
+          wr.status AS connection_status,
+          wr.requested_by,
+          wr.request_message,
+          wr.created_at AS requested_at,
+          wr.responded_at
+
+        FROM users u
+
+        LEFT JOIN wholesaler_retailers wr
+          ON wr.wholesaler_id = u.id
+         AND wr.retailer_id = ?
+
+        WHERE u.role = 'wholesaler'
+          AND u.status = 'active'
+
+          AND (
+            ? = ''
+            OR u.business_name LIKE ?
+            OR u.name LIKE ?
+            OR u.location LIKE ?
+            OR u.business_category LIKE ?
+            OR u.shop_type LIKE ?
+          )
+
+        ORDER BY
+          CASE
+            WHEN wr.status = 'active' THEN 0
+            WHEN wr.status = 'pending' THEN 1
+            ELSE 2
+          END,
+          u.business_name ASC
+
+        LIMIT 100
+        `,
+        [
+          retailerId,
+          search,
+          like,
+          like,
+          like,
+          like,
+          like,
+        ]
+      );
+
+      return res.json({
+        wholesalers,
+      });
+    } catch (error) {
+      console.error(
+        "SEARCH RETAILER WHOLESALERS ERROR:",
+        error
+      );
+
+      next(error);
+    }
+  }
+);
+// ============================================================
+// RETAILER: SEND CONNECTION REQUEST
+// POST /api/retailer/wholesalers/:id/request
+// ============================================================
+
+app.post(
+  "/api/retailer/wholesalers/:id/request",
+  auth,
+  allow("retailer"),
+  async (req, res, next) => {
+    const connection = await pool.getConnection();
+
+    try {
+      const retailerId = Number(req.user.id);
+      const wholesalerId = Number(req.params.id);
+
+      const message =
+        String(req.body?.message || "")
+          .trim()
+          .slice(0, 500) || null;
+
+      if (
+        !Number.isInteger(wholesalerId) ||
+        wholesalerId <= 0
+      ) {
+        return res.status(400).json({
+          message: "Invalid wholesaler.",
+        });
+      }
+
+      await connection.beginTransaction();
+
+      const [[wholesaler]] = await connection.query(
+        `
+        SELECT
+          id,
+          business_name
+        FROM users
+        WHERE id = ?
+          AND role = 'wholesaler'
+          AND status = 'active'
+        LIMIT 1
+        FOR UPDATE
+        `,
+        [wholesalerId]
+      );
+
+      if (!wholesaler) {
+        await connection.rollback();
+
+        return res.status(404).json({
+          message: "Wholesaler not found.",
+        });
+      }
+
+      const [[existing]] = await connection.query(
+        `
+        SELECT
+          id,
+          status
+        FROM wholesaler_retailers
+        WHERE wholesaler_id = ?
+          AND retailer_id = ?
+        LIMIT 1
+        FOR UPDATE
+        `,
+        [
+          wholesalerId,
+          retailerId,
+        ]
+      );
+
+      if (existing?.status === "active") {
+        await connection.rollback();
+
+        return res.status(409).json({
+          message:
+            "You are already connected with this wholesaler.",
+        });
+      }
+
+      if (existing?.status === "pending") {
+        await connection.rollback();
+
+        return res.status(409).json({
+          message:
+            "Connection request is already pending.",
+        });
+      }
+
+      let connectionId;
+
+      if (existing) {
+        await connection.query(
+          `
+          UPDATE wholesaler_retailers
+          SET
+            status = 'pending',
+            requested_by = 'retailer',
+            request_message = ?,
+            source = 'retailer_request',
+            responded_at = NULL,
+            created_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+          `,
+          [
+            message,
+            existing.id,
+          ]
+        );
+
+        connectionId = existing.id;
+      } else {
+        const [result] = await connection.query(
+          `
+          INSERT INTO wholesaler_retailers
+          (
+            wholesaler_id,
+            retailer_id,
+            source,
+            credit_limit,
+            payment_terms,
+            notes,
+            status,
+            requested_by,
+            request_message,
+            responded_at,
+            created_at
+          )
+          VALUES
+          (
+            ?,
+            ?,
+            'retailer_request',
+            0,
+            'Cash / immediate',
+            NULL,
+            'pending',
+            'retailer',
+            ?,
+            NULL,
+            CURRENT_TIMESTAMP
+          )
+          `,
+          [
+            wholesalerId,
+            retailerId,
+            message,
+          ]
+        );
+
+        connectionId = result.insertId;
+      }
+
+      await connection.commit();
+
+      return res.status(201).json({
+        message:
+          "Connection request sent successfully.",
+        connection_id: connectionId,
+        status: "pending",
+      });
+    } catch (error) {
+      await connection.rollback();
+
+      console.error(
+        "SEND WHOLESALER CONNECTION REQUEST ERROR:",
+        error
+      );
+
+      next(error);
+    } finally {
+      connection.release();
+    }
+  }
+);
+// ============================================================
+// RETAILER: VIEW WHOLESALER CONNECTION REQUESTS
+// GET /api/retailer/wholesaler-requests
+// ============================================================
+
+app.get(
+  "/api/retailer/wholesaler-requests",
+  auth,
+  allow("retailer"),
+  async (req, res, next) => {
+    try {
+      const retailerId = Number(req.user.id);
+
+      const requests = await q(
+        `
+        SELECT
+          wr.id AS connection_id,
+          wr.wholesaler_id,
+          wr.status,
+          wr.requested_by,
+          wr.request_message,
+          wr.created_at AS requested_at,
+          wr.responded_at,
+
+          u.business_name,
+          u.name,
+          u.phone,
+          u.email,
+          u.location,
+          u.logo_url,
+          u.business_category,
+          u.shop_type
+
+        FROM wholesaler_retailers wr
+
+        INNER JOIN users u
+          ON u.id = wr.wholesaler_id
+         AND u.role = 'wholesaler'
+
+        WHERE wr.retailer_id = ?
+
+        ORDER BY wr.created_at DESC
+        `,
+        [retailerId]
+      );
+
+      return res.json({
+        requests,
+      });
+    } catch (error) {
+      console.error(
+        "LOAD RETAILER WHOLESALER REQUESTS ERROR:",
+        error
+      );
+
+      next(error);
+    }
+  }
+);
+// ============================================================
+// RETAILER: CANCEL PENDING CONNECTION REQUEST
+// DELETE /api/retailer/wholesaler-requests/:id
+// ============================================================
+
+app.delete(
+  "/api/retailer/wholesaler-requests/:id",
+  auth,
+  allow("retailer"),
+  async (req, res, next) => {
+    try {
+      const retailerId = Number(req.user.id);
+      const connectionId = Number(req.params.id);
+
+      if (
+        !Number.isInteger(connectionId) ||
+        connectionId <= 0
+      ) {
+        return res.status(400).json({
+          message: "Invalid connection request ID.",
+        });
+      }
+
+      const result = await q(
+        `
+        DELETE FROM wholesaler_retailers
+        WHERE id = ?
+          AND retailer_id = ?
+          AND status = 'pending'
+          AND requested_by = 'retailer'
+        `,
+        [
+          connectionId,
+          retailerId,
+        ]
+      );
+
+      if (!result.affectedRows) {
+        return res.status(404).json({
+          message:
+            "Pending connection request not found.",
+        });
+      }
+
+      return res.json({
+        message: "Connection request cancelled.",
+      });
+    } catch (error) {
+      console.error(
+        "CANCEL WHOLESALER REQUEST ERROR:",
+        error
+      );
+
+      next(error);
+    }
+  }
+);
+
+// ============================================================
+// PUBLIC B2B MARKETPLACE
+// Browse verified wholesalers, categories and products.
+// No login is required for discovery. Existing catalog storefront
+// and authenticated retailer connection-request routes remain unchanged.
+// ============================================================
+
+function marketplaceLimit(value, fallback = 12, maximum = 48) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) return fallback;
+  return Math.min(parsed, maximum);
+}
+
+function marketplaceOffset(page, limit) {
+  const parsed = Number(page);
+  const safePage = Number.isInteger(parsed) && parsed > 0 ? parsed : 1;
+  return { page: safePage, offset: (safePage - 1) * limit };
+}
+
+const MARKETPLACE_WHOLESALER_SELECT = `
+  SELECT
+    u.id,
+    u.business_name,
+    u.name,
+    u.location,
+    u.business_category,
+    u.shop_type,
+    u.description,
+    u.website,
+    u.logo_url,
+    u.created_at,
+    c.id AS catalog_id,
+    c.slug AS catalog_slug,
+    c.catalog_title,
+    c.catalog_description,
+    c.cover_image_url,
+    COALESCE(ps.product_count, 0) AS product_count,
+    COALESCE(ps.category_count, 0) AS category_count,
+    COALESCE(os.order_count, 0) AS order_count,
+    COALESCE(os.order_value, 0) AS order_value
+  FROM users u
+  INNER JOIN wholesale_catalogs c
+    ON c.wholesaler_id = u.id
+   AND c.is_published = 1
+  LEFT JOIN (
+    SELECT
+      wholesaler_id,
+      COUNT(*) AS product_count,
+      COUNT(DISTINCT category_name) AS category_count
+    FROM wholesale_products
+    WHERE is_active = 1
+    GROUP BY wholesaler_id
+  ) ps ON ps.wholesaler_id = u.id
+  LEFT JOIN (
+    SELECT
+      wholesaler_id,
+      COUNT(*) AS order_count,
+      COALESCE(SUM(total_amount), 0) AS order_value
+    FROM wholesale_catalog_orders
+    WHERE status <> 'cancelled'
+    GROUP BY wholesaler_id
+  ) os ON os.wholesaler_id = u.id
+  WHERE u.role = 'wholesaler'
+    AND u.status = 'active'
+`;
+
+// Marketplace homepage data in one request.
+app.get(
+  "/api/public/marketplace/home",
+  async (_req, res, next) => {
+    try {
+      const [categories, featured, trending, newest, popularProducts, stats] =
+        await Promise.all([
+          q(`
+            SELECT
+              category_name AS name,
+              COUNT(*) AS product_count,
+              COUNT(DISTINCT wholesaler_id) AS wholesaler_count
+            FROM wholesale_products
+            WHERE is_active = 1
+              AND category_name IS NOT NULL
+              AND TRIM(category_name) <> ''
+            GROUP BY category_name
+            ORDER BY wholesaler_count DESC, product_count DESC, category_name ASC
+            LIMIT 12
+          `),
+          q(`${MARKETPLACE_WHOLESALER_SELECT}
+            ORDER BY
+              COALESCE(os.order_count, 0) DESC,
+              COALESCE(ps.product_count, 0) DESC,
+              u.business_name ASC
+            LIMIT 8
+          `),
+          q(`${MARKETPLACE_WHOLESALER_SELECT}
+            ORDER BY
+              COALESCE(os.order_count, 0) DESC,
+              COALESCE(os.order_value, 0) DESC,
+              c.updated_at DESC
+            LIMIT 8
+          `),
+          q(`${MARKETPLACE_WHOLESALER_SELECT}
+            ORDER BY u.created_at DESC, u.id DESC
+            LIMIT 8
+          `),
+          q(`
+            SELECT
+              p.id,
+              p.wholesaler_id,
+              p.name,
+              p.brand,
+              p.category_name,
+              p.description,
+              p.image_url,
+              p.unit,
+              p.pack_size,
+              p.minimum_order,
+              p.price_mode,
+              p.price,
+              p.compare_price,
+              p.stock_quantity,
+              u.business_name,
+              u.logo_url AS wholesaler_logo_url,
+              u.location,
+              c.slug AS catalog_slug
+            FROM wholesale_products p
+            INNER JOIN users u
+              ON u.id = p.wholesaler_id
+             AND u.role = 'wholesaler'
+             AND u.status = 'active'
+            INNER JOIN wholesale_catalogs c
+              ON c.wholesaler_id = p.wholesaler_id
+             AND c.is_published = 1
+            WHERE p.is_active = 1
+            ORDER BY p.updated_at DESC, p.id DESC
+            LIMIT 12
+          `),
+          q(`
+            SELECT
+              (SELECT COUNT(*)
+                 FROM users u
+                 INNER JOIN wholesale_catalogs c
+                   ON c.wholesaler_id = u.id AND c.is_published = 1
+                WHERE u.role = 'wholesaler' AND u.status = 'active') AS wholesalers,
+              (SELECT COUNT(*)
+                 FROM wholesale_products p
+                 INNER JOIN users u ON u.id = p.wholesaler_id
+                 INNER JOIN wholesale_catalogs c
+                   ON c.wholesaler_id = p.wholesaler_id AND c.is_published = 1
+                WHERE p.is_active = 1
+                  AND u.role = 'wholesaler'
+                  AND u.status = 'active') AS products,
+              (SELECT COUNT(DISTINCT p.category_name)
+                 FROM wholesale_products p
+                 INNER JOIN users u ON u.id = p.wholesaler_id
+                WHERE p.is_active = 1
+                  AND u.role = 'wholesaler'
+                  AND u.status = 'active'
+                  AND p.category_name IS NOT NULL
+                  AND TRIM(p.category_name) <> '') AS categories
+          `),
+        ]);
+
+      return res.json({
+        stats: stats[0] || { wholesalers: 0, products: 0, categories: 0 },
+        categories,
+        featured_wholesalers: featured,
+        trending_wholesalers: trending,
+        new_wholesalers: newest,
+        popular_products: popularProducts,
+      });
+    } catch (error) {
+      console.error("LOAD PUBLIC MARKETPLACE HOME ERROR:", error);
+      next(error);
+    }
+  }
+);
+
+// Search/browse published wholesaler storefronts.
+app.get(
+  "/api/public/marketplace/wholesalers",
+  async (req, res, next) => {
+    try {
+      const search = String(req.query.q || "").trim();
+      const category = String(req.query.category || "").trim();
+      const location = String(req.query.location || "").trim();
+      const sort = String(req.query.sort || "featured").toLowerCase();
+      const limit = marketplaceLimit(req.query.limit, 12, 48);
+      const { page, offset } = marketplaceOffset(req.query.page, limit);
+
+      const searchLike = `%${search}%`;
+      const categoryLike = `%${category}%`;
+      const locationLike = `%${location}%`;
+
+      const filters = `
+        AND (
+          ? = ''
+          OR u.business_name LIKE ?
+          OR u.name LIKE ?
+          OR u.description LIKE ?
+          OR u.business_category LIKE ?
+          OR u.shop_type LIKE ?
+          OR u.location LIKE ?
+          OR EXISTS (
+            SELECT 1
+            FROM wholesale_products sp
+            WHERE sp.wholesaler_id = u.id
+              AND sp.is_active = 1
+              AND (
+                sp.name LIKE ?
+                OR sp.brand LIKE ?
+                OR sp.category_name LIKE ?
+              )
+          )
+        )
+        AND (? = '' OR u.business_category LIKE ? OR EXISTS (
+          SELECT 1
+          FROM wholesale_products cp
+          WHERE cp.wholesaler_id = u.id
+            AND cp.is_active = 1
+            AND cp.category_name LIKE ?
+        ))
+        AND (? = '' OR u.location LIKE ?)
+      `;
+
+      const params = [
+        search,
+        searchLike,
+        searchLike,
+        searchLike,
+        searchLike,
+        searchLike,
+        searchLike,
+        searchLike,
+        searchLike,
+        searchLike,
+        category,
+        categoryLike,
+        categoryLike,
+        location,
+        locationLike,
+      ];
+
+      const orderBy = {
+        newest: "u.created_at DESC, u.id DESC",
+        name: "u.business_name ASC",
+        products: "COALESCE(ps.product_count, 0) DESC, u.business_name ASC",
+        trending: "COALESCE(os.order_count, 0) DESC, COALESCE(os.order_value, 0) DESC",
+        featured: "COALESCE(os.order_count, 0) DESC, COALESCE(ps.product_count, 0) DESC, u.business_name ASC",
+      }[sort] || "COALESCE(os.order_count, 0) DESC, COALESCE(ps.product_count, 0) DESC, u.business_name ASC";
+
+      const wholesalers = await q(
+        `${MARKETPLACE_WHOLESALER_SELECT}
+         ${filters}
+         ORDER BY ${orderBy}
+         LIMIT ? OFFSET ?`,
+        [...params, limit, offset]
+      );
+
+      const [countRow] = await q(
+        `SELECT COUNT(*) AS total
+         FROM users u
+         INNER JOIN wholesale_catalogs c
+           ON c.wholesaler_id = u.id
+          AND c.is_published = 1
+         WHERE u.role = 'wholesaler'
+           AND u.status = 'active'
+         ${filters}`,
+        params
+      );
+
+      const total = Number(countRow?.total || 0);
+
+      return res.json({
+        wholesalers,
+        pagination: {
+          page,
+          limit,
+          total,
+          pages: Math.max(1, Math.ceil(total / limit)),
+        },
+        filters: { q: search, category, location, sort },
+      });
+    } catch (error) {
+      console.error("SEARCH PUBLIC MARKETPLACE WHOLESALERS ERROR:", error);
+      next(error);
+    }
+  }
+);
+
+// Categories used by marketplace navigation/filter chips.
+app.get(
+  "/api/public/marketplace/categories",
+  async (_req, res, next) => {
+    try {
+      const categories = await q(`
+        SELECT
+          p.category_name AS name,
+          COUNT(*) AS product_count,
+          COUNT(DISTINCT p.wholesaler_id) AS wholesaler_count
+        FROM wholesale_products p
+        INNER JOIN users u
+          ON u.id = p.wholesaler_id
+         AND u.role = 'wholesaler'
+         AND u.status = 'active'
+        INNER JOIN wholesale_catalogs c
+          ON c.wholesaler_id = p.wholesaler_id
+         AND c.is_published = 1
+        WHERE p.is_active = 1
+          AND p.category_name IS NOT NULL
+          AND TRIM(p.category_name) <> ''
+        GROUP BY p.category_name
+        ORDER BY wholesaler_count DESC, product_count DESC, p.category_name ASC
+      `);
+
+      return res.json({ categories });
+    } catch (error) {
+      console.error("LOAD PUBLIC MARKETPLACE CATEGORIES ERROR:", error);
+      next(error);
+    }
+  }
+);
+
+// Search products across all published wholesaler catalogs.
+app.get(
+  "/api/public/marketplace/products",
+  async (req, res, next) => {
+    try {
+      const search = String(req.query.q || "").trim();
+      const category = String(req.query.category || "").trim();
+      const limit = marketplaceLimit(req.query.limit, 24, 48);
+      const { page, offset } = marketplaceOffset(req.query.page, limit);
+      const like = `%${search}%`;
+      const categoryLike = `%${category}%`;
+
+      const products = await q(
+        `SELECT
+           p.id,
+           p.wholesaler_id,
+           p.name,
+           p.sku,
+           p.brand,
+           p.category_name,
+           p.description,
+           p.image_url,
+           p.unit,
+           p.pack_size,
+           p.minimum_order,
+           p.price_mode,
+           p.price,
+           p.compare_price,
+           p.stock_quantity,
+           u.business_name,
+           u.logo_url AS wholesaler_logo_url,
+           u.location,
+           c.slug AS catalog_slug
+         FROM wholesale_products p
+         INNER JOIN users u
+           ON u.id = p.wholesaler_id
+          AND u.role = 'wholesaler'
+          AND u.status = 'active'
+         INNER JOIN wholesale_catalogs c
+           ON c.wholesaler_id = p.wholesaler_id
+          AND c.is_published = 1
+         WHERE p.is_active = 1
+           AND (
+             ? = ''
+             OR p.name LIKE ?
+             OR p.brand LIKE ?
+             OR p.category_name LIKE ?
+             OR u.business_name LIKE ?
+           )
+           AND (? = '' OR p.category_name LIKE ?)
+         ORDER BY p.updated_at DESC, p.id DESC
+         LIMIT ? OFFSET ?`,
+        [
+          search,
+          like,
+          like,
+          like,
+          like,
+          category,
+          categoryLike,
+          limit,
+          offset,
+        ]
+      );
+
+      return res.json({
+        products,
+        pagination: { page, limit },
+        filters: { q: search, category },
+      });
+    } catch (error) {
+      console.error("SEARCH PUBLIC MARKETPLACE PRODUCTS ERROR:", error);
+      next(error);
+    }
+  }
+);
+
 app.listen(
   process.env.PORT || 5000,
   () =>
