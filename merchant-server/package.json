@@ -12,9 +12,11 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "google-auth-library": "^11.0.2",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.2.0",
-    "mysql2": "^3.11.5"
+    "mysql2": "^3.11.5",
+    "nodemailer": "^9.0.5"
   },
   "devDependencies": {
     "nodemon": "^3.1.9"

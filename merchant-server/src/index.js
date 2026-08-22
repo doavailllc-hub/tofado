@@ -5,6 +5,8 @@ import express from "express";
 import cors from "cors";
 import jwt from "jsonwebtoken";
 import multer from "multer";
+import { OAuth2Client } from "google-auth-library";
+import nodemailer from "nodemailer";
 import {
   DeleteObjectCommand,
   PutObjectCommand,
@@ -27,8 +29,140 @@ const sign = (user) =>
   jwt.sign(
     { id: user.id, role: user.role },
     process.env.JWT_SECRET || "dev-secret",
-    { expiresIn: "7d" }
+    { expiresIn: "15m" }
   );
+
+const googleClient = new OAuth2Client();
+let mailTransport = null;
+function getMailTransport() {
+  if (mailTransport) return mailTransport;
+  if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
+    return null;
+  }
+  mailTransport = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: Number(process.env.SMTP_PORT || 587),
+    secure: String(process.env.SMTP_SECURE || "false") === "true",
+    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+  });
+  return mailTransport;
+}
+const emailCodeHash = (email, code) =>
+  crypto
+    .createHmac("sha256", process.env.JWT_SECRET || "dev-secret")
+    .update(`${email}:${code}`)
+    .digest("hex");
+const refreshTokenHash = (token) =>
+  crypto.createHash("sha256").update(token).digest("hex");
+
+function publicUser(user) {
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    business_name: user.business_name,
+    phone: user.phone || null,
+    location: user.location || null,
+    address: user.address || null,
+    tax_number: user.tax_number || null,
+    license_number: user.license_number || null,
+    logo_url: user.logo_url || null,
+    business_category: user.business_category || null,
+    shop_type: user.shop_type || null,
+    verification_status:
+      user.role === "wholesaler"
+        ? user.verification_status || "verified"
+        : "not_required",
+    profile_complete: Boolean(
+      user.business_name &&
+      user.phone &&
+      user.location &&
+      user.business_category &&
+      user.shop_type
+    ),
+  };
+}
+
+let authSchemaPromise = null;
+
+async function ensureAuthSchema() {
+  if (authSchemaPromise) return authSchemaPromise;
+
+  authSchemaPromise = (async () => {
+    const [columns] = await pool.query(
+      `
+      SELECT COLUMN_NAME
+      FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'users'
+        AND COLUMN_NAME IN ('google_sub', 'auth_provider', 'verification_status')
+      `
+    );
+    const existing = new Set(columns.map((column) => column.COLUMN_NAME));
+
+    if (!existing.has("google_sub")) {
+      await pool.query(
+        "ALTER TABLE users ADD COLUMN google_sub VARCHAR(255) NULL UNIQUE AFTER email"
+      );
+    }
+    if (!existing.has("auth_provider")) {
+      await pool.query(
+        "ALTER TABLE users ADD COLUMN auth_provider VARCHAR(30) NOT NULL DEFAULT 'password' AFTER google_sub"
+      );
+    }
+    if (!existing.has("verification_status")) {
+      await pool.query(
+        "ALTER TABLE users ADD COLUMN verification_status VARCHAR(30) NOT NULL DEFAULT 'verified' AFTER status"
+      );
+    }
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS auth_sessions (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        user_id BIGINT NOT NULL,
+        token_hash CHAR(64) NOT NULL UNIQUE,
+        expires_at DATETIME NOT NULL,
+        revoked_at DATETIME NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        last_used_at DATETIME NULL,
+        INDEX idx_auth_sessions_user (user_id),
+        INDEX idx_auth_sessions_expiry (expires_at)
+      ) ENGINE=InnoDB
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS email_login_codes (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        email VARCHAR(190) NOT NULL,
+        code_hash CHAR(64) NOT NULL,
+        expires_at DATETIME NOT NULL,
+        attempts TINYINT UNSIGNED NOT NULL DEFAULT 0,
+        used_at DATETIME NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_email_login_lookup (email, created_at),
+        INDEX idx_email_login_expiry (expires_at)
+      ) ENGINE=InnoDB
+    `);
+  })().catch((error) => {
+    authSchemaPromise = null;
+    throw error;
+  });
+
+  return authSchemaPromise;
+}
+
+async function createSession(user, connection = pool) {
+  const refreshToken = crypto.randomBytes(48).toString("base64url");
+  await connection.query(
+    `
+    INSERT INTO auth_sessions (user_id, token_hash, expires_at)
+    VALUES (?, ?, DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 180 DAY))
+    `,
+    [user.id, refreshTokenHash(refreshToken)]
+  );
+  return { token: sign(user), refresh_token: refreshToken, user: publicUser(user) };
+}
 
 const s3 = new S3Client({
   region: process.env.AWS_REGION,
@@ -128,7 +262,7 @@ async function ensureRegistrationSchema() {
       FROM INFORMATION_SCHEMA.COLUMNS
       WHERE TABLE_SCHEMA = DATABASE()
         AND TABLE_NAME = 'merchant_applications'
-        AND COLUMN_NAME IN ('business_category', 'shop_type')
+        AND COLUMN_NAME IN ('business_category', 'shop_type', 'source_user_id', 'logo_url')
       `
     );
 
@@ -153,6 +287,18 @@ async function ensureRegistrationSchema() {
         ADD COLUMN shop_type VARCHAR(120) NULL
         AFTER business_category
         `
+      );
+    }
+
+    if (!existingColumns.has("source_user_id")) {
+      await pool.query(
+        "ALTER TABLE merchant_applications ADD COLUMN source_user_id BIGINT NULL AFTER id"
+      );
+    }
+
+    if (!existingColumns.has("logo_url")) {
+      await pool.query(
+        "ALTER TABLE merchant_applications ADD COLUMN logo_url TEXT NULL AFTER license_number"
       );
     }
   })().catch((error) => {
@@ -294,18 +440,302 @@ app.post("/api/applications", async (req, res, next) => {
     next(error);
   }
 });
-app.post('/api/auth/login', async (req, res, next) => { try { const rows = await q('SELECT * FROM users WHERE email=? LIMIT 1', [req.body.email]); const u = rows[0]; if (!u || u.status !== 'active' || !verifyPassword(req.body.password || '', u.password_hash)) return res.status(401).json({ message: 'Invalid credentials or account not approved' }); const user = {
-      id: u.id,
-      name: u.name,
-      email: u.email,
-      role: u.role,
-      business_name: u.business_name,
-      location: u.location,
-      logo_url: u.logo_url || null,
-      business_category: u.business_category || null,
-      shop_type: u.shop_type || null,
-    }; res.json({ token: sign(user), user }) } catch (e) { next(e) } });
-app.get('/api/auth/me', auth, async (req, res) => { const [u] = await q('SELECT id,name,email,role,business_name,phone,location,business_category,shop_type,logo_url,status FROM users WHERE id=?', [req.user.id]); res.json(u) });
+app.post("/api/auth/email/request", async (req, res, next) => {
+  try {
+    await ensureAuthSchema();
+    const email = String(req.body?.email || "").trim().toLowerCase();
+    if (!/^\S+@\S+\.\S+$/.test(email)) {
+      return res.status(400).json({ message: "Enter a valid email address." });
+    }
+
+    const [recent] = await q(
+      `SELECT id FROM email_login_codes
+       WHERE email = ? AND created_at > DATE_SUB(CURRENT_TIMESTAMP, INTERVAL 60 SECOND)
+       ORDER BY id DESC LIMIT 1`,
+      [email]
+    );
+    if (recent) {
+      return res.status(429).json({ message: "Wait one minute before requesting another code." });
+    }
+
+    const transport = getMailTransport();
+    if (!transport) {
+      return res.status(503).json({ message: "Email sign-in is not configured." });
+    }
+
+    const code = String(crypto.randomInt(100000, 1000000));
+    const result = await q(
+      `INSERT INTO email_login_codes (email, code_hash, expires_at)
+       VALUES (?, ?, DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 10 MINUTE))`,
+      [email, emailCodeHash(email, code)]
+    );
+
+    try {
+      await transport.sendMail({
+        from: process.env.SMTP_FROM || process.env.SMTP_USER,
+        to: email,
+        subject: "Your Tofado sign-in code",
+        text: `Your Tofado sign-in code is ${code}. It expires in 10 minutes. If you did not request this code, you can ignore this email.`,
+        html: `<div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:28px"><h2 style="color:#5b35b5">Sign in to Tofado</h2><p>Use this verification code to continue:</p><div style="font-size:34px;font-weight:700;letter-spacing:8px;padding:18px 0">${code}</div><p style="color:#5f6368">This code expires in 10 minutes. Never share it with anyone.</p></div>`,
+      });
+    } catch (mailError) {
+      await q("DELETE FROM email_login_codes WHERE id = ?", [result.insertId]);
+      throw mailError;
+    }
+
+    return res.json({ message: "Verification code sent.", expires_in: 600 });
+  } catch (error) {
+    console.error("SEND EMAIL LOGIN CODE ERROR:", error);
+    next(error);
+  }
+});
+
+app.post("/api/auth/email/verify", async (req, res, next) => {
+  const connection = await pool.getConnection();
+  try {
+    await ensureAuthSchema();
+    const email = String(req.body?.email || "").trim().toLowerCase();
+    const code = String(req.body?.code || "").trim();
+    const role = String(req.body?.role || "").trim().toLowerCase();
+    if (!/^\S+@\S+\.\S+$/.test(email) || !/^\d{6}$/.test(code)) {
+      return res.status(400).json({ message: "Enter the six-digit code from your email." });
+    }
+
+    await connection.beginTransaction();
+    const [[loginCode]] = await connection.query(
+      `SELECT * FROM email_login_codes
+       WHERE email = ? AND used_at IS NULL AND expires_at > CURRENT_TIMESTAMP
+       ORDER BY id DESC LIMIT 1 FOR UPDATE`,
+      [email]
+    );
+    const supplied = Buffer.from(emailCodeHash(email, code), "hex");
+    const expected = loginCode ? Buffer.from(loginCode.code_hash, "hex") : Buffer.alloc(32);
+    if (!loginCode || loginCode.attempts >= 5 || !crypto.timingSafeEqual(supplied, expected)) {
+      if (loginCode) {
+        await connection.query("UPDATE email_login_codes SET attempts = attempts + 1 WHERE id = ?", [loginCode.id]);
+        await connection.commit();
+      } else {
+        await connection.rollback();
+      }
+      return res.status(401).json({ message: "The verification code is invalid or expired." });
+    }
+
+    let [[user]] = await connection.query("SELECT * FROM users WHERE email = ? LIMIT 1 FOR UPDATE", [email]);
+    if (user && user.status !== "active") {
+      await connection.rollback();
+      return res.status(403).json({ message: "Your merchant account is awaiting approval." });
+    }
+    if (!user) {
+      if (!["retailer", "wholesaler"].includes(role)) {
+        await connection.rollback();
+        return res.status(400).json({ message: "Choose retailer or wholesaler." });
+      }
+      const displayName = email.split("@")[0].replace(/[._-]+/g, " ").slice(0, 120);
+      const passwordHash = hashPassword(crypto.randomBytes(32).toString("hex"));
+      const [created] = await connection.query(
+        `INSERT INTO users
+          (role, name, business_name, email, auth_provider, phone, location,
+           business_category, shop_type, password_hash, status,
+           verification_status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'email_otp', '', '', '', '', ?, 'active', ?,
+                 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+        [role, displayName, displayName, email, passwordHash,
+          role === "wholesaler" ? "draft" : "not_required"]
+      );
+      [[user]] = await connection.query("SELECT * FROM users WHERE id = ? LIMIT 1", [created.insertId]);
+    }
+
+    await connection.query("UPDATE email_login_codes SET used_at = CURRENT_TIMESTAMP WHERE id = ?", [loginCode.id]);
+    const session = await createSession(user, connection);
+    await connection.commit();
+    return res.json(session);
+  } catch (error) {
+    await connection.rollback();
+    next(error);
+  } finally {
+    connection.release();
+  }
+});
+
+app.post("/api/auth/login", async (req, res, next) => {
+  try {
+    await ensureAuthSchema();
+    const email = String(req.body?.email || "").trim().toLowerCase();
+    const rows = await q("SELECT * FROM users WHERE email = ? LIMIT 1", [email]);
+    const user = rows[0];
+
+    if (
+      !user ||
+      user.status !== "active" ||
+      !user.password_hash ||
+      !verifyPassword(req.body?.password || "", user.password_hash)
+    ) {
+      return res.status(401).json({
+        message: "Invalid credentials or account not approved",
+      });
+    }
+
+    return res.json(await createSession(user));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/auth/google", async (req, res, next) => {
+  try {
+    await ensureAuthSchema();
+    const idToken = String(req.body?.id_token || "");
+    const role = String(req.body?.role || "").trim().toLowerCase();
+    const audiences = String(process.env.GOOGLE_CLIENT_IDS || "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean);
+
+    if (!idToken || !audiences.length) {
+      return res.status(503).json({ message: "Google sign-in is not configured." });
+    }
+
+    const ticket = await googleClient.verifyIdToken({
+      idToken,
+      audience: audiences,
+    });
+    const identity = ticket.getPayload();
+
+    if (!identity?.sub || !identity.email || !identity.email_verified) {
+      return res.status(401).json({ message: "Google account could not be verified." });
+    }
+
+    const email = identity.email.trim().toLowerCase();
+    let [user] = await q(
+      "SELECT * FROM users WHERE google_sub = ? OR email = ? ORDER BY google_sub = ? DESC LIMIT 1",
+      [identity.sub, email, identity.sub]
+    );
+
+    if (user) {
+      if (user.google_sub && user.google_sub !== identity.sub) {
+        return res.status(409).json({ message: "This email is linked to another Google account." });
+      }
+      if (user.status !== "active") {
+        return res.status(403).json({ message: "Your merchant account is awaiting approval." });
+      }
+      if (!user.google_sub) {
+        await q(
+          "UPDATE users SET google_sub = ?, auth_provider = 'google', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+          [identity.sub, user.id]
+        );
+        user = { ...user, google_sub: identity.sub, auth_provider: "google" };
+      }
+      return res.json(await createSession(user));
+    }
+
+    if (!["retailer", "wholesaler"].includes(role)) {
+      return res.status(409).json({
+        code: "ROLE_REQUIRED",
+        message: "Choose how you will use Tofado to create your account.",
+      });
+    }
+
+    const name = String(identity.name || email.split("@")[0]).trim().slice(0, 150);
+    const passwordHash = hashPassword(crypto.randomBytes(32).toString("hex"));
+    const result = await q(
+      `
+      INSERT INTO users
+        (role, name, business_name, email, google_sub, auth_provider,
+         phone, location, business_category, shop_type, password_hash,
+         status, verification_status, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, 'google', '', '', '', '', ?, 'active',
+              ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      `,
+      [
+        role,
+        name,
+        name,
+        email,
+        identity.sub,
+        passwordHash,
+        role === "wholesaler" ? "draft" : "not_required",
+      ]
+    );
+    [user] = await q("SELECT * FROM users WHERE id = ? LIMIT 1", [result.insertId]);
+    return res.status(201).json(await createSession(user));
+  } catch (error) {
+    if (error?.message?.includes("Wrong recipient") || error?.message?.includes("Invalid token")) {
+      return res.status(401).json({ message: "Google account could not be verified." });
+    }
+    next(error);
+  }
+});
+
+app.post("/api/auth/refresh", async (req, res, next) => {
+  const connection = await pool.getConnection();
+  try {
+    await ensureAuthSchema();
+    const refreshToken = String(req.body?.refresh_token || "");
+    if (!refreshToken) {
+      return res.status(401).json({ message: "Refresh token is required." });
+    }
+
+    await connection.beginTransaction();
+    const [[session]] = await connection.query(
+      `
+      SELECT s.id AS session_id, u.*
+      FROM auth_sessions s
+      INNER JOIN users u ON u.id = s.user_id
+      WHERE s.token_hash = ? AND s.revoked_at IS NULL
+        AND s.expires_at > CURRENT_TIMESTAMP AND u.status = 'active'
+      LIMIT 1 FOR UPDATE
+      `,
+      [refreshTokenHash(refreshToken)]
+    );
+    if (!session) {
+      await connection.rollback();
+      return res.status(401).json({ message: "Session has expired. Sign in again." });
+    }
+
+    await connection.query(
+      "UPDATE auth_sessions SET revoked_at = CURRENT_TIMESTAMP, last_used_at = CURRENT_TIMESTAMP WHERE id = ?",
+      [session.session_id]
+    );
+    const renewed = await createSession(session, connection);
+    await connection.commit();
+    return res.json(renewed);
+  } catch (error) {
+    await connection.rollback();
+    next(error);
+  } finally {
+    connection.release();
+  }
+});
+
+app.post("/api/auth/logout", async (req, res, next) => {
+  try {
+    await ensureAuthSchema();
+    const refreshToken = String(req.body?.refresh_token || "");
+    if (refreshToken) {
+      await q(
+        "UPDATE auth_sessions SET revoked_at = CURRENT_TIMESTAMP WHERE token_hash = ? AND revoked_at IS NULL",
+        [refreshTokenHash(refreshToken)]
+      );
+    }
+    return res.json({ message: "Signed out." });
+  } catch (error) {
+    next(error);
+  }
+});
+app.get("/api/auth/me", auth, async (req, res, next) => {
+  try {
+    const [user] = await q(
+      "SELECT id, name, email, role, business_name, phone, location, address, tax_number, license_number, business_category, shop_type, logo_url, status, verification_status FROM users WHERE id = ? LIMIT 1",
+      [req.user.id]
+    );
+    if (!user || user.status !== "active") {
+      return res.status(401).json({ message: "Account is unavailable." });
+    }
+    return res.json(publicUser(user));
+  } catch (error) {
+    next(error);
+  }
+});
 app.get("/api/profile", auth, async (req, res, next) => {
   try {
     const [profile] = await q(
@@ -578,6 +1008,104 @@ app.delete(
     }
   }
 );
+
+app.post(
+  "/api/wholesaler/verification",
+  auth,
+  allow("wholesaler"),
+  async (req, res, next) => {
+    try {
+      await ensureAuthSchema();
+      await ensureRegistrationSchema();
+      const fields = {
+        name: String(req.body?.name || "").trim(),
+        business_name: String(req.body?.business_name || "").trim(),
+        phone: String(req.body?.phone || "").trim(),
+        location: String(req.body?.location || "").trim(),
+        address: String(req.body?.address || "").trim(),
+        tax_number: String(req.body?.tax_number || "").trim(),
+        license_number: String(req.body?.license_number || "").trim(),
+        business_category: String(req.body?.business_category || "").trim(),
+        shop_type: String(req.body?.shop_type || "").trim(),
+      };
+
+      if (Object.values(fields).some((value) => !value)) {
+        return res.status(400).json({
+          message: "Complete all required verification details.",
+        });
+      }
+
+      const [user] = await q(
+        "SELECT email, password_hash, logo_url, verification_status FROM users WHERE id = ? LIMIT 1",
+        [req.user.id]
+      );
+      if (!user) {
+        return res.status(404).json({ message: "Wholesaler account not found." });
+      }
+      if (!user.logo_url) {
+        return res.status(400).json({ message: "Upload your company logo before submitting." });
+      }
+      if (user.verification_status === "verified") {
+        return res.status(409).json({ message: "This wholesaler is already verified." });
+      }
+
+      await q(
+        `
+        UPDATE users
+        SET name = ?, business_name = ?, phone = ?, location = ?, address = ?,
+            tax_number = ?, license_number = ?, business_category = ?, shop_type = ?,
+            verification_status = 'pending', updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+        `,
+        [...Object.values(fields), req.user.id]
+      );
+
+      const [existingApplication] = await q(
+        "SELECT id FROM merchant_applications WHERE source_user_id = ? ORDER BY id DESC LIMIT 1",
+        [req.user.id]
+      );
+      const applicationValues = [
+        fields.name, fields.business_name, fields.business_category,
+        fields.shop_type, user.email, fields.phone, fields.location,
+        fields.address, fields.tax_number, fields.license_number, user.logo_url,
+        user.password_hash,
+      ];
+
+      if (existingApplication) {
+        await q(
+          `
+          UPDATE merchant_applications
+          SET role = 'wholesaler', name = ?, business_name = ?, business_category = ?,
+              shop_type = ?, email = ?, phone = ?, location = ?, address = ?,
+              tax_number = ?, license_number = ?, logo_url = ?, password_hash = ?,
+              status = 'pending', reviewed_by = NULL, reviewed_at = NULL,
+              created_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+          `,
+          [...applicationValues, existingApplication.id]
+        );
+      } else {
+        await q(
+          `
+          INSERT INTO merchant_applications
+            (source_user_id, role, name, business_name, business_category, shop_type,
+             email, phone, location, address, tax_number, license_number, logo_url,
+             password_hash, status)
+          VALUES (?, 'wholesaler', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+          `,
+          [req.user.id, ...applicationValues]
+        );
+      }
+
+      return res.status(201).json({
+        message: "Verification application submitted.",
+        verification_status: "pending",
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 app.get('/api/retailer/wholesalers', auth, allow('retailer'), async (req, res) => res.json(await q("SELECT id,business_name,location,phone FROM users WHERE role='wholesaler' AND status='active' ORDER BY business_name")));
 app.post('/api/retailer/orders', auth, allow('retailer'), async (req, res, next) => { const c = await pool.getConnection(); try { const { wholesaler_id, delivery_address, required_date, notes, items } = req.body; if (!wholesaler_id || !delivery_address || !Array.isArray(items) || !items.length) return res.status(400).json({ message: 'Wholesaler, delivery address and items are required' }); await c.beginTransaction(); const orderNo = `PO-${Date.now().toString().slice(-8)}`; const [r] = await c.query('INSERT INTO purchase_orders(order_no,retailer_id,wholesaler_id,delivery_address,required_date,notes,status,total_amount) VALUES(?,?,?,?,?,?,?,0)', [orderNo, req.user.id, wholesaler_id, delivery_address, required_date || null, notes || null, 'pending']); for (const i of items) await c.query('INSERT INTO purchase_order_items(order_id,product_name,quantity,unit,notes) VALUES(?,?,?,?,?)', [r.insertId, i.product_name, Number(i.quantity), i.unit, i.notes || null]); await c.commit(); res.status(201).json({ id: r.insertId, order_no: orderNo }) } catch (e) { await c.rollback(); next(e) } finally { c.release() } });
 app.get('/api/retailer/orders', auth, allow('retailer'), async (req, res) => res.json(await q(`SELECT o.id,o.order_no,w.business_name wholesaler_name,o.created_at,o.status,o.total_amount FROM purchase_orders o JOIN users w ON w.id=o.wholesaler_id WHERE o.retailer_id=? ORDER BY o.id DESC`, [req.user.id])));
@@ -596,6 +1124,7 @@ app.get("/api/admin/applications", auth, allow("admin"), async (req, res, next) 
       `
       SELECT
         id,
+        source_user_id,
         role,
         name,
         business_name,
@@ -607,6 +1136,7 @@ app.get("/api/admin/applications", auth, allow("admin"), async (req, res, next) 
         address,
         tax_number,
         license_number,
+        logo_url,
         status,
         created_at,
         reviewed_at
@@ -670,7 +1200,25 @@ app.patch(
 
       let approvedWholesalerUserId = null;
 
-      if (status === "approved") {
+      if (application.source_user_id) {
+        const [[sourceUser]] = await connection.query(
+          "SELECT id, role FROM users WHERE id = ? LIMIT 1 FOR UPDATE",
+          [application.source_user_id]
+        );
+        if (!sourceUser || sourceUser.role !== application.role) {
+          await connection.rollback();
+          return res.status(409).json({
+            message: "The application account is unavailable.",
+          });
+        }
+        await connection.query(
+          "UPDATE users SET verification_status = ?, verified_at = CASE WHEN ? = 'verified' THEN CURRENT_TIMESTAMP ELSE verified_at END, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+          [status === "approved" ? "verified" : "rejected", status === "approved" ? "verified" : "rejected", sourceUser.id]
+        );
+        if (status === "approved" && sourceUser.role === "wholesaler") {
+          approvedWholesalerUserId = Number(sourceUser.id);
+        }
+      } else if (status === "approved") {
         const [[existingUser]] = await connection.query(
           `
           SELECT id
@@ -6775,6 +7323,126 @@ app.delete(
         error
       );
 
+      next(error);
+    }
+  }
+);
+
+// ============================================================
+// WHOLESALER: VIEW PENDING RETAILER CONNECTION REQUESTS
+// GET /api/wholesaler/retailer-requests
+// ============================================================
+
+app.get(
+  "/api/wholesaler/retailer-requests",
+  auth,
+  allow("wholesaler"),
+  async (req, res, next) => {
+    try {
+      const wholesalerId = Number(req.user.id);
+
+      const requests = await q(
+        `
+        SELECT
+          wr.id AS connection_id,
+          wr.retailer_id,
+          wr.status,
+          wr.requested_by,
+          wr.request_message,
+          wr.created_at AS requested_at,
+
+          u.business_name,
+          u.name,
+          u.phone,
+          u.email,
+          u.location,
+          u.address,
+          u.logo_url,
+          u.business_category,
+          u.shop_type
+
+        FROM wholesaler_retailers wr
+
+        INNER JOIN users u
+          ON u.id = wr.retailer_id
+         AND u.role = 'retailer'
+
+        WHERE wr.wholesaler_id = ?
+          AND wr.status = 'pending'
+          AND wr.requested_by = 'retailer'
+
+        ORDER BY wr.created_at DESC
+        `,
+        [wholesalerId]
+      );
+
+      return res.json({ requests });
+    } catch (error) {
+      console.error("LOAD WHOLESALER RETAILER REQUESTS ERROR:", error);
+      next(error);
+    }
+  }
+);
+
+// ============================================================
+// WHOLESALER: ACCEPT OR REJECT RETAILER CONNECTION REQUEST
+// PATCH /api/wholesaler/retailer-requests/:id
+// body: { action: "accept" | "reject" }
+// ============================================================
+
+app.patch(
+  "/api/wholesaler/retailer-requests/:id",
+  auth,
+  allow("wholesaler"),
+  async (req, res, next) => {
+    try {
+      const wholesalerId = Number(req.user.id);
+      const connectionId = Number(req.params.id);
+      const action = String(req.body?.action || "").trim().toLowerCase();
+
+      if (!Number.isInteger(connectionId) || connectionId <= 0) {
+        return res.status(400).json({
+          message: "Invalid connection request ID.",
+        });
+      }
+
+      if (!["accept", "reject"].includes(action)) {
+        return res.status(400).json({
+          message: "Action must be accept or reject.",
+        });
+      }
+
+      const nextStatus = action === "accept" ? "active" : "rejected";
+      const result = await q(
+        `
+        UPDATE wholesaler_retailers
+        SET
+          status = ?,
+          responded_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+          AND wholesaler_id = ?
+          AND status = 'pending'
+          AND requested_by = 'retailer'
+        `,
+        [nextStatus, connectionId, wholesalerId]
+      );
+
+      if (!result.affectedRows) {
+        return res.status(404).json({
+          message: "Pending retailer request not found.",
+        });
+      }
+
+      return res.json({
+        message:
+          action === "accept"
+            ? "Retailer connection request accepted."
+            : "Retailer connection request rejected.",
+        connection_id: connectionId,
+        status: nextStatus,
+      });
+    } catch (error) {
+      console.error("UPDATE WHOLESALER RETAILER REQUEST ERROR:", error);
       next(error);
     }
   }
