@@ -55,9 +55,9 @@ export default function BrowserMockup() {
 
             <div className="preview-table">
               {[
-                ["CO-82490012", "Fresh Basket", "SAR 6,240", "Confirmed"],
-                ["CO-82490011", "Metro Mart", "SAR 3,800", "Packed"],
-                ["CO-82490010", "Green Store", "SAR 12,500", "Delivered"],
+                ["CO-82490012", "Fresh Basket", "INR 6,240", "Confirmed"],
+                ["CO-82490011", "Metro Mart", "INR 3,800", "Packed"],
+                ["CO-82490010", "Green Store", "INR 12,500", "Delivered"],
               ].map((row) => (
                 <div key={row[0]}>
                   <span><ShoppingCart size={15} /></span>

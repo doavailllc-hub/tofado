@@ -61,7 +61,7 @@ function money(product) {
   const value = Number(product?.price || 0);
   if (!value) return "Contact supplier";
 
-  return `SAR ${value.toLocaleString("en-SA", {
+  return `INR ${value.toLocaleString("en-IN", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;

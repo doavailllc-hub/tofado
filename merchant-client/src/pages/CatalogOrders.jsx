@@ -58,7 +58,7 @@ function formatDate(value) {
     return value;
   }
 
-  return new Intl.DateTimeFormat("en-SA", {
+  return new Intl.DateTimeFormat("en-IN", {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -66,7 +66,7 @@ function formatDate(value) {
 }
 
 function money(value) {
-  return Number(value || 0).toLocaleString("en-SA", {
+  return Number(value || 0).toLocaleString("en-IN", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
@@ -266,7 +266,7 @@ export default function CatalogOrders() {
     if (!selectedOrder || !item?.id) return;
     const unitPrice = Number(quotePrices[item.id]);
     if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
-      setWorkflowError("Enter a valid quoted unit price greater than SAR 0.00.");
+      setWorkflowError("Enter a valid quoted unit price greater than INR 0.00.");
       return;
     }
     try {
@@ -514,7 +514,7 @@ const response = await api.post(
             <Wallet size={19} />
           </div>
           <span>Total value</span>
-          <strong>SAR {money(summary.value)}</strong>
+          <strong>INR {money(summary.value)}</strong>
         </article>
       </section>
 
@@ -607,7 +607,7 @@ const response = await api.post(
                   <div className="ov3-order-amount">
                     <small>Total</small>
                     <strong>
-                      SAR {money(order.total_amount)}
+                      INR {money(order.total_amount)}
                     </strong>
                   </div>
                 </div>
@@ -658,7 +658,7 @@ const response = await api.post(
                   </Badge>
 
                   <strong>
-                    SAR {money(selectedOrder.total_amount)}
+                    INR {money(selectedOrder.total_amount)}
                   </strong>
                 </div>
               </div>
@@ -763,7 +763,7 @@ const response = await api.post(
                     </div>
 
                     <strong>
-                      SAR {money(selectedOrder.total_amount)}
+                      INR {money(selectedOrder.total_amount)}
                     </strong>
                   </div>
 
@@ -796,7 +796,7 @@ const response = await api.post(
                                 <label>
                                   <span>Quoted unit price</span>
                                   <div className="ov3-price-input">
-                                    <b>SAR</b>
+                                    <b>INR</b>
                                     <input type="number" min="0.01" step="0.01"
                                       placeholder="0.00"
                                       value={quotePrices[item.id] ?? ""}
@@ -816,8 +816,8 @@ const response = await api.post(
                             {itemNeedsQuote(item) && Number(item.unit_price || 0) <= 0
                               ? <em>Price required</em>
                               : <>
-                                  <small>SAR {money(item.unit_price)} × {Number(item.quantity || 0)}</small>
-                                  <strong>SAR {money(item.line_total)}</strong>
+                                  <small>INR {money(item.unit_price)} × {Number(item.quantity || 0)}</small>
+                                  <strong>INR {money(item.line_total)}</strong>
                                 </>
                             }
                           </span>
@@ -877,7 +877,7 @@ const response = await api.post(
                       <span>
                         <small>Amount</small>
                         <strong>
-                          SAR{" "}
+                          INR{" "}
                           {money(selectedOrder.total_amount)}
                         </strong>
                       </span>

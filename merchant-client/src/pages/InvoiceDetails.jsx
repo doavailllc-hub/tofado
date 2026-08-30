@@ -106,7 +106,7 @@ function normalizeInvoiceResponse(data) {
 }
 
 function formatMoney(value) {
-  return `SAR ${Number(value || 0).toLocaleString("en-SA", {
+  return `INR ${Number(value || 0).toLocaleString("en-IN", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
@@ -121,7 +121,7 @@ function formatDate(value, includeTime = false) {
     return String(value);
   }
 
-  return new Intl.DateTimeFormat("en-SA", {
+  return new Intl.DateTimeFormat("en-IN", {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -609,7 +609,7 @@ export default function InvoiceDetails() {
                       <td>
                         {Number(
                           item.quantity || 0
-                        ).toLocaleString("en-SA")}
+                        ).toLocaleString("en-IN")}
                       </td>
 
                       <td>{item.unit || "—"}</td>

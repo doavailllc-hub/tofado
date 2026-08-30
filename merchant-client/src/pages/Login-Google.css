@@ -209,6 +209,55 @@
   gap: 15px;
 }
 
+.google-role-picker {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-top: 20px;
+  padding: 4px;
+  border-radius: 10px;
+  background: var(--login-soft);
+}
+
+.google-role-picker button {
+  min-height: 36px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: var(--login-muted);
+  background: transparent;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.google-role-picker button.active {
+  border-color: var(--login-border);
+  color: var(--login-blue);
+  background: #fff;
+}
+
+.google-code-control input {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 7px;
+  text-align: center;
+}
+
+.google-login-secondary {
+  border: 0;
+  color: var(--login-blue);
+  background: transparent;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.google-signin-button {
+  display: flex;
+  min-height: 44px;
+  justify-content: center;
+  overflow: hidden;
+}
+
 .google-login-form label {
   display: flex;
   flex-direction: column;

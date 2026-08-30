@@ -72,8 +72,8 @@ export default function Retailers() {
           <div className="solution-stat-grid">
             <article><ShoppingCart size={18} /><span><small>Total orders</small><strong>42</strong></span></article>
             <article><Clock3 size={18} /><span><small>Pending</small><strong>6</strong></span></article>
-            <article><Wallet size={18} /><span><small>Outstanding</small><strong>SAR 9,400</strong></span></article>
-            <article><BarChart3 size={18} /><span><small>Purchase value</small><strong>SAR 82K</strong></span></article>
+            <article><Wallet size={18} /><span><small>Outstanding</small><strong>INR 9,400</strong></span></article>
+            <article><BarChart3 size={18} /><span><small>Purchase value</small><strong>INR 82K</strong></span></article>
           </div>
         </div>
       </section>

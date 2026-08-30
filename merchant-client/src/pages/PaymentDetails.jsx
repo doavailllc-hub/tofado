@@ -10,7 +10,7 @@ import { Badge, Spinner, statusTone } from "../components/UI";
 import "./PaymentManagement.css";
 
 const money = value =>
-  `SAR ${Number(value || 0).toLocaleString("en-SA", {
+  `INR ${Number(value || 0).toLocaleString("en-IN", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
@@ -19,7 +19,7 @@ const date = value => {
   if (!value) return "—";
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return String(value);
-  return new Intl.DateTimeFormat("en-SA", {
+  return new Intl.DateTimeFormat("en-IN", {
     day: "2-digit", month: "short", year: "numeric",
     hour: "2-digit", minute: "2-digit",
   }).format(parsed);

@@ -18,7 +18,7 @@ const initial = {
 };
 
 const money = value =>
-  `SAR ${Number(value || 0).toLocaleString("en-SA", {
+  `INR ${Number(value || 0).toLocaleString("en-IN", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
@@ -176,7 +176,7 @@ export default function RecordPayment() {
           <div className="payment-form-grid">
             <label className="payment-field">
               <span>Payment amount *</span>
-              <div className="payment-money-input"><span>SAR</span><input type="number" min="0.01" max={outstanding || undefined} step="0.01" value={form.amount} onChange={e => change("amount", e.target.value)} required/></div>
+              <div className="payment-money-input"><span>INR</span><input type="number" min="0.01" max={outstanding || undefined} step="0.01" value={form.amount} onChange={e => change("amount", e.target.value)} required/></div>
             </label>
 
             <label className="payment-field">

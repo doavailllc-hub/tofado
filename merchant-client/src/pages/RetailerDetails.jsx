@@ -87,7 +87,7 @@ function asArray(value, keys = []) {
 function formatMoney(value) {
   const amount = Number(value || 0);
 
-  return `SAR ${amount.toLocaleString("en-SA", {
+  return `INR ${amount.toLocaleString("en-IN", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
@@ -102,7 +102,7 @@ function formatDate(value, includeTime = false) {
     return String(value);
   }
 
-  return new Intl.DateTimeFormat("en-SA", {
+  return new Intl.DateTimeFormat("en-IN", {
     day: "2-digit",
     month: "short",
     year: "numeric",

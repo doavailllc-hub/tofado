@@ -23,7 +23,7 @@ import api from "../services/api";
 import "./Retailer.css";
 
 const money = (value) =>
-  `SAR ${Number(value || 0).toLocaleString("en-SA", {
+  `INR ${Number(value || 0).toLocaleString("en-IN", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
@@ -33,7 +33,7 @@ const date = (value, includeTime = false) => {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
 
-  return new Intl.DateTimeFormat("en-SA", {
+  return new Intl.DateTimeFormat("en-IN", {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -404,7 +404,7 @@ export default function RetailerInvoiceDetails() {
 
               <span>
                 {Number(item.quantity || 0).toLocaleString(
-                  "en-SA"
+                  "en-IN"
                 )}{" "}
                 {item.unit || ""}
               </span>
@@ -531,7 +531,7 @@ export default function RetailerInvoiceDetails() {
               <label>
                 <span>Payment amount</span>
                 <div className="retailer-invoice-money-input">
-                  <span>SAR</span>
+                  <span>INR</span>
                   <input
                     type="number"
                     min="0.01"

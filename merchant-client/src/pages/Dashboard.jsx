@@ -95,7 +95,7 @@ function formatDate(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
 
-  return new Intl.DateTimeFormat("en-SA", {
+  return new Intl.DateTimeFormat("en-IN", {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -109,7 +109,7 @@ function formatStatValue(key, value) {
     ["purchase_value", "outstanding", "order_value"].includes(key) &&
     Number.isFinite(numericValue)
   ) {
-    return `SAR ${numericValue.toLocaleString("en-SA", {
+    return `INR ${numericValue.toLocaleString("en-IN", {
       maximumFractionDigits: 2,
     })}`;
   }
@@ -405,8 +405,8 @@ export default function Dashboard() {
 
                       <strong>
                         {item.total_amount
-                          ? `SAR ${Number(item.total_amount).toLocaleString(
-                              "en-SA",
+                          ? `INR ${Number(item.total_amount).toLocaleString(
+                              "en-IN",
                               {
                                 minimumFractionDigits: 2,
                                 maximumFractionDigits: 2,

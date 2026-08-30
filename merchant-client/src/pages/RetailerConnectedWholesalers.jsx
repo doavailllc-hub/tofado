@@ -187,7 +187,7 @@ export default function RetailerConnectedWholesalers() {
                   <p>
                     Payment terms: {item.payment_terms || "As agreed"}
                     {item.credit_limit
-                      ? ` · Credit limit SAR ${Number(
+                      ? ` · Credit limit INR ${Number(
                           item.credit_limit
                         ).toLocaleString()}`
                       : ""}

@@ -41,7 +41,7 @@ const rank = {
 };
 
 function money(value) {
-  return `SAR ${Number(value || 0).toLocaleString("en-SA", {
+  return `INR ${Number(value || 0).toLocaleString("en-IN", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
@@ -52,7 +52,7 @@ function date(value) {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return String(value);
 
-  return new Intl.DateTimeFormat("en-SA", {
+  return new Intl.DateTimeFormat("en-IN", {
     day: "2-digit",
     month: "short",
     year: "numeric",

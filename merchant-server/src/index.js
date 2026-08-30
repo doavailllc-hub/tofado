@@ -52,6 +52,22 @@ const emailCodeHash = (email, code) =>
     .createHmac("sha256", process.env.JWT_SECRET || "dev-secret")
     .update(`${email}:${code}`)
     .digest("hex");
+
+function getPlayReviewLogin(email, role = null) {
+  const reviewEmail = String(process.env.PLAY_REVIEW_EMAIL || "").trim().toLowerCase();
+  const reviewCode = String(process.env.PLAY_REVIEW_OTP || "").trim();
+  const reviewRole = String(process.env.PLAY_REVIEW_ROLE || "").trim().toLowerCase();
+  const configured =
+    /^\S+@\S+\.\S+$/.test(reviewEmail) &&
+    /^\d{6}$/.test(reviewCode) &&
+    ["retailer", "wholesaler"].includes(reviewRole);
+
+  if (!configured || email !== reviewEmail || (role && role !== reviewRole)) {
+    return null;
+  }
+
+  return { code: reviewCode, role: reviewRole };
+}
 const refreshTokenHash = (token) =>
   crypto.createHash("sha256").update(token).digest("hex");
 
@@ -458,12 +474,13 @@ app.post("/api/auth/email/request", async (req, res, next) => {
       return res.status(429).json({ message: "Wait one minute before requesting another code." });
     }
 
-    const transport = getMailTransport();
-    if (!transport) {
+    const playReviewLogin = getPlayReviewLogin(email);
+    const transport = playReviewLogin ? null : getMailTransport();
+    if (!playReviewLogin && !transport) {
       return res.status(503).json({ message: "Email sign-in is not configured." });
     }
 
-    const code = String(crypto.randomInt(100000, 1000000));
+    const code = playReviewLogin?.code || String(crypto.randomInt(100000, 1000000));
     const result = await q(
       `INSERT INTO email_login_codes (email, code_hash, expires_at)
        VALUES (?, ?, DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 10 MINUTE))`,
@@ -471,6 +488,9 @@ app.post("/api/auth/email/request", async (req, res, next) => {
     );
 
     try {
+      if (playReviewLogin) {
+        return res.json({ message: "Verification code sent.", expires_in: 600 });
+      }
       await transport.sendMail({
         from: process.env.SMTP_FROM || process.env.SMTP_USER,
         to: email,
@@ -501,6 +521,7 @@ app.post("/api/auth/email/verify", async (req, res, next) => {
       return res.status(400).json({ message: "Enter the six-digit code from your email." });
     }
 
+    const playReviewLogin = getPlayReviewLogin(email, role);
     await connection.beginTransaction();
     const [[loginCode]] = await connection.query(
       `SELECT * FROM email_login_codes
@@ -524,6 +545,12 @@ app.post("/api/auth/email/verify", async (req, res, next) => {
     if (user && user.status !== "active") {
       await connection.rollback();
       return res.status(403).json({ message: "Your merchant account is awaiting approval." });
+    }
+    if (user && ["retailer", "wholesaler"].includes(role) && user.role !== role) {
+      await connection.rollback();
+      return res.status(403).json({
+        message: `This account belongs to the Tofado ${user.role} app.`,
+      });
     }
     if (!user) {
       if (!["retailer", "wholesaler"].includes(role)) {
@@ -614,6 +641,11 @@ app.post("/api/auth/google", async (req, res, next) => {
     if (user) {
       if (user.google_sub && user.google_sub !== identity.sub) {
         return res.status(409).json({ message: "This email is linked to another Google account." });
+      }
+      if (["retailer", "wholesaler"].includes(role) && user.role !== role) {
+        return res.status(403).json({
+          message: `This account belongs to the Tofado ${user.role} app.`,
+        });
       }
       if (user.status !== "active") {
         return res.status(403).json({ message: "Your merchant account is awaiting approval." });
@@ -1110,12 +1142,12 @@ app.get('/api/retailer/wholesalers', auth, allow('retailer'), async (req, res) =
 app.post('/api/retailer/orders', auth, allow('retailer'), async (req, res, next) => { const c = await pool.getConnection(); try { const { wholesaler_id, delivery_address, required_date, notes, items } = req.body; if (!wholesaler_id || !delivery_address || !Array.isArray(items) || !items.length) return res.status(400).json({ message: 'Wholesaler, delivery address and items are required' }); await c.beginTransaction(); const orderNo = `PO-${Date.now().toString().slice(-8)}`; const [r] = await c.query('INSERT INTO purchase_orders(order_no,retailer_id,wholesaler_id,delivery_address,required_date,notes,status,total_amount) VALUES(?,?,?,?,?,?,?,0)', [orderNo, req.user.id, wholesaler_id, delivery_address, required_date || null, notes || null, 'pending']); for (const i of items) await c.query('INSERT INTO purchase_order_items(order_id,product_name,quantity,unit,notes) VALUES(?,?,?,?,?)', [r.insertId, i.product_name, Number(i.quantity), i.unit, i.notes || null]); await c.commit(); res.status(201).json({ id: r.insertId, order_no: orderNo }) } catch (e) { await c.rollback(); next(e) } finally { c.release() } });
 app.get('/api/retailer/orders', auth, allow('retailer'), async (req, res) => res.json(await q(`SELECT o.id,o.order_no,w.business_name wholesaler_name,o.created_at,o.status,o.total_amount FROM purchase_orders o JOIN users w ON w.id=o.wholesaler_id WHERE o.retailer_id=? ORDER BY o.id DESC`, [req.user.id])));
 app.get('/api/retailer/invoices', auth, allow('retailer'), async (req, res) => res.json(await q(`SELECT i.id,i.invoice_no,w.business_name wholesaler_name,o.order_no,i.total_amount,i.paid_amount,i.due_date,i.status FROM invoices i JOIN purchase_orders o ON o.id=i.order_id JOIN users w ON w.id=i.wholesaler_id WHERE i.retailer_id=? ORDER BY i.id DESC`, [req.user.id])));
-app.get('/api/retailer/dashboard', auth, allow('retailer'), async (req, res) => { const [s] = await q(`SELECT COUNT(*) total_orders,SUM(status='pending') pending_orders,COALESCE(SUM(total_amount),0) purchase_value FROM purchase_orders WHERE retailer_id=?`, [req.user.id]); const [inv] = await q(`SELECT COALESCE(SUM(total_amount-paid_amount),0) outstanding FROM invoices WHERE retailer_id=?`, [req.user.id]); const recent = await q(`SELECT o.id,o.order_no,w.business_name,o.created_at,o.status,o.total_amount FROM purchase_orders o JOIN users w ON w.id=o.wholesaler_id WHERE o.retailer_id=? ORDER BY o.id DESC LIMIT 8`, [req.user.id]); res.json({ stats: { total_orders: s.total_orders, pending_orders: s.pending_orders, purchase_value: `SAR ${Number(s.purchase_value).toFixed(2)}`, outstanding: `SAR ${Number(inv.outstanding).toFixed(2)}` }, recent }) });
+app.get('/api/retailer/dashboard', auth, allow('retailer'), async (req, res) => { const [s] = await q(`SELECT COUNT(*) total_orders,SUM(status='pending') pending_orders,COALESCE(SUM(total_amount),0) purchase_value FROM purchase_orders WHERE retailer_id=?`, [req.user.id]); const [inv] = await q(`SELECT COALESCE(SUM(total_amount-paid_amount),0) outstanding FROM invoices WHERE retailer_id=?`, [req.user.id]); const recent = await q(`SELECT o.id,o.order_no,w.business_name,o.created_at,o.status,o.total_amount FROM purchase_orders o JOIN users w ON w.id=o.wholesaler_id WHERE o.retailer_id=? ORDER BY o.id DESC LIMIT 8`, [req.user.id]); res.json({ stats: { total_orders: s.total_orders, pending_orders: s.pending_orders, purchase_value: `INR ${Number(s.purchase_value).toFixed(2)}`, outstanding: `INR ${Number(inv.outstanding).toFixed(2)}` }, recent }) });
 app.get('/api/wholesaler/orders', auth, allow('wholesaler'), async (req, res) => res.json(await q(`SELECT o.id,o.order_no,r.business_name retailer_name,o.created_at,o.required_date,o.status,o.total_amount FROM purchase_orders o JOIN users r ON r.id=o.retailer_id WHERE o.wholesaler_id=? ORDER BY o.id DESC`, [req.user.id])));
 app.patch('/api/wholesaler/orders/:id/status', auth, allow('wholesaler'), async (req, res) => { const allowed = ['pending', 'confirmed', 'packed', 'dispatched', 'delivered', 'cancelled']; if (!allowed.includes(req.body.status)) return res.status(400).json({ message: 'Invalid status' }); await q('UPDATE purchase_orders SET status=?, delivered_at=IF(?="delivered",NOW(),delivered_at) WHERE id=? AND wholesaler_id=?', [req.body.status, req.body.status, req.params.id, req.user.id]); res.json({ message: 'Updated' }) });
 app.get('/api/wholesaler/invoices', auth, allow('wholesaler'), async (req, res) => res.json(await q(`SELECT i.id,i.invoice_no,r.business_name retailer_name,o.order_no,i.total_amount,i.paid_amount,i.due_date,i.status FROM invoices i JOIN users r ON r.id=i.retailer_id JOIN purchase_orders o ON o.id=i.order_id WHERE i.wholesaler_id=? ORDER BY i.id DESC`, [req.user.id])));
 app.get('/api/wholesaler/payments', auth, allow('wholesaler'), async (req, res) => res.json(await q(`SELECT p.id,p.payment_no,r.business_name retailer_name,i.invoice_no,p.amount,p.method,p.paid_at,p.status FROM payments p JOIN invoices i ON i.id=p.invoice_id JOIN users r ON r.id=p.retailer_id WHERE p.wholesaler_id=? ORDER BY p.id DESC`, [req.user.id])));
-app.get('/api/wholesaler/dashboard', auth, allow('wholesaler'), async (req, res) => { const [s] = await q(`SELECT COUNT(*) total_orders,SUM(status='pending') pending_orders,SUM(status='delivered') delivered_orders,COUNT(DISTINCT retailer_id) retailers FROM purchase_orders WHERE wholesaler_id=?`, [req.user.id]); const [i] = await q(`SELECT COALESCE(SUM(total_amount-paid_amount),0) outstanding FROM invoices WHERE wholesaler_id=?`, [req.user.id]); const recent = await q(`SELECT o.id,o.order_no,r.business_name,o.created_at,o.status,o.total_amount FROM purchase_orders o JOIN users r ON r.id=o.retailer_id WHERE o.wholesaler_id=? ORDER BY o.id DESC LIMIT 8`, [req.user.id]); res.json({ stats: { total_orders: s.total_orders, pending_orders: s.pending_orders, delivered_orders: s.delivered_orders, retailers: s.retailers, outstanding: `SAR ${Number(i.outstanding).toFixed(2)}` }, recent }) });
+app.get('/api/wholesaler/dashboard', auth, allow('wholesaler'), async (req, res) => { const [s] = await q(`SELECT COUNT(*) total_orders,SUM(status='pending') pending_orders,SUM(status='delivered') delivered_orders,COUNT(DISTINCT retailer_id) retailers FROM purchase_orders WHERE wholesaler_id=?`, [req.user.id]); const [i] = await q(`SELECT COALESCE(SUM(total_amount-paid_amount),0) outstanding FROM invoices WHERE wholesaler_id=?`, [req.user.id]); const recent = await q(`SELECT o.id,o.order_no,r.business_name,o.created_at,o.status,o.total_amount FROM purchase_orders o JOIN users r ON r.id=o.retailer_id WHERE o.wholesaler_id=? ORDER BY o.id DESC LIMIT 8`, [req.user.id]); res.json({ stats: { total_orders: s.total_orders, pending_orders: s.pending_orders, delivered_orders: s.delivered_orders, retailers: s.retailers, outstanding: `INR ${Number(i.outstanding).toFixed(2)}` }, recent }) });
 app.get("/api/admin/applications", auth, allow("admin"), async (req, res, next) => {
   try {
     await ensureRegistrationSchema();
@@ -1316,7 +1348,7 @@ app.patch(
 app.get('/api/admin/users', auth, allow('admin'), async (req, res) => res.json(await q("SELECT id,business_name,role,name,phone,location,status,created_at FROM users WHERE role!='admin' ORDER BY id DESC")));
 app.get('/api/admin/orders', auth, allow('admin'), async (req, res) => res.json(await q(`SELECT o.id,o.order_no,r.business_name retailer_name,w.business_name wholesaler_name,o.status,o.total_amount,o.created_at FROM purchase_orders o JOIN users r ON r.id=o.retailer_id JOIN users w ON w.id=o.wholesaler_id ORDER BY o.id DESC`)));
 app.get('/api/admin/finance', auth, allow('admin'), async (req, res) => res.json(await q(`SELECT i.id,i.invoice_no,r.business_name retailer_name,w.business_name wholesaler_name,i.total_amount,i.paid_amount,i.status,i.due_date FROM invoices i JOIN users r ON r.id=i.retailer_id JOIN users w ON w.id=i.wholesaler_id ORDER BY i.id DESC`)));
-app.get('/api/admin/dashboard', auth, allow('admin'), async (req, res) => { const [[u]] = await pool.query(`SELECT SUM(role='retailer') retailers,SUM(role='wholesaler') wholesalers FROM users WHERE status='active'`); const [[a]] = await pool.query(`SELECT COUNT(*) pending_verifications FROM merchant_applications WHERE status='pending'`); const [[o]] = await pool.query(`SELECT COUNT(*) total_orders,COALESCE(SUM(total_amount),0) order_value FROM purchase_orders`); const recent = await q(`SELECT o.id,o.order_no,CONCAT(r.business_name,' → ',w.business_name) business_name,o.created_at,o.status,o.total_amount FROM purchase_orders o JOIN users r ON r.id=o.retailer_id JOIN users w ON w.id=o.wholesaler_id ORDER BY o.id DESC LIMIT 8`); res.json({ stats: { retailers: u.retailers || 0, wholesalers: u.wholesalers || 0, pending_verifications: a.pending_verifications, total_orders: o.total_orders, order_value: `SAR ${Number(o.order_value).toFixed(2)}` }, recent }) });
+app.get('/api/admin/dashboard', auth, allow('admin'), async (req, res) => { const [[u]] = await pool.query(`SELECT SUM(role='retailer') retailers,SUM(role='wholesaler') wholesalers FROM users WHERE status='active'`); const [[a]] = await pool.query(`SELECT COUNT(*) pending_verifications FROM merchant_applications WHERE status='pending'`); const [[o]] = await pool.query(`SELECT COUNT(*) total_orders,COALESCE(SUM(total_amount),0) order_value FROM purchase_orders`); const recent = await q(`SELECT o.id,o.order_no,CONCAT(r.business_name,' → ',w.business_name) business_name,o.created_at,o.status,o.total_amount FROM purchase_orders o JOIN users r ON r.id=o.retailer_id JOIN users w ON w.id=o.wholesaler_id ORDER BY o.id DESC LIMIT 8`); res.json({ stats: { retailers: u.retailers || 0, wholesalers: u.wholesalers || 0, pending_verifications: a.pending_verifications, total_orders: o.total_orders, order_value: `INR ${Number(o.order_value).toFixed(2)}` }, recent }) });
 
 
 app.use((err, req, res, next) => {
@@ -5904,7 +5936,7 @@ app.patch(
 
         return res.status(400).json({
           message:
-            "Quoted price must be greater than SAR 0.00.",
+            "Quoted price must be greater than INR 0.00.",
         });
       }
 
@@ -6718,7 +6750,7 @@ app.post(
       if (amount > availableOutstanding + 0.001) {
         await connection.rollback();
         return res.status(400).json({
-          message: `Payment cannot exceed the available outstanding amount of SAR ${availableOutstanding.toFixed(
+          message: `Payment cannot exceed the available outstanding amount of INR ${availableOutstanding.toFixed(
             2
           )}.`,
         });

@@ -12,7 +12,7 @@ const plans = [
   },
   {
     name: "Business",
-    price: "SAR 149",
+    price: "INR 149",
     period: "/ month",
     text: "For growing retailers and wholesalers that need complete operations.",
     featured: true,

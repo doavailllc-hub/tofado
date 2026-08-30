@@ -1,15 +1,10 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowRight,
-  Building2,
   CheckCircle2,
-  KeyRound,
   Sparkles,
-  Eye,
-  EyeOff,
   LoaderCircle,
-  LockKeyhole,
   Mail,
   ShieldCheck,
   Store,
@@ -19,30 +14,6 @@ import { useAuth } from "../context/AuthContext";
 import logo from "../assets/tofado-logo.png";
 import "./Login-Google.css";
 
-const demoAccounts = [
-  {
-    label: "Administrator",
-    description: "Manage merchants and marketplace activity",
-    email: "admin@tofado.com",
-    password: "Admin@123",
-    icon: ShieldCheck,
-  },
-  {
-    label: "Retail shop",
-    description: "Create purchase lists and track orders",
-    email: "retailer@tofado.com",
-    password: "Retailer@123",
-    icon: Store,
-  },
-  {
-    label: "Wholesaler",
-    description: "Manage products, orders, and collections",
-    email: "wholesaler@tofado.com",
-    password: "Wholesale@123",
-    icon: Building2,
-  },
-];
-
 const benefits = [
   "Verified retailer and wholesaler accounts",
   "Secure B2B purchase-order management",
@@ -50,52 +21,77 @@ const benefits = [
 ];
 
 export default function Login() {
-  const [form, setForm] = useState({
-    email: "admin@tofado.com",
-    password: "Admin@123",
-  });
+  const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
+  const [role, setRole] = useState("");
+  const [stage, setStage] = useState("email");
+  const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
+  const googleButtonRef = useRef(null);
 
-  const { login, loading } = useAuth();
+  const { requestEmailCode, verifyEmailCode, googleLogin, loading } = useAuth();
   const navigate = useNavigate();
+  const googleClientId = import.meta.env.VITE_GOOGLE_WEB_CLIENT_ID;
 
-  const updateField = (field, value) => {
-    setError("");
-    setForm((current) => ({
-      ...current,
-      [field]: value,
-    }));
-  };
+  const finishLogin = (user) => navigate(`/${user.role}`, { replace: true });
 
-  const useDemoAccount = (account) => {
-    setError("");
-    setForm({
-      email: account.email,
-      password: account.password,
-    });
-  };
-
-  const submit = async (event) => {
+  const sendCode = async (event) => {
     event.preventDefault();
     setError("");
-
+    setSending(true);
     try {
-      const user = await login(
-        form.email.trim().toLowerCase(),
-        form.password
-      );
-
-      navigate(`/${user.role}`, {
-        replace: true,
-      });
+      await requestEmailCode(email);
+      setStage("code");
     } catch (requestError) {
-      setError(
-        requestError.response?.data?.message ||
-          "Unable to sign in. Please check your email and password."
-      );
+      setError(requestError.response?.data?.message || "Unable to send the verification code.");
+    } finally {
+      setSending(false);
     }
   };
+
+  const verifyCode = async (event) => {
+    event.preventDefault();
+    setError("");
+    try {
+      finishLogin(await verifyEmailCode(email, code, role));
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || "The verification code is invalid or expired.");
+    }
+  };
+
+  useEffect(() => {
+    if (!googleClientId) return undefined;
+    const renderGoogleButton = () => {
+      if (!window.google?.accounts?.id || !googleButtonRef.current) return;
+      window.google.accounts.id.initialize({
+        client_id: googleClientId,
+        callback: async ({ credential }) => {
+          setError("");
+          try {
+            finishLogin(await googleLogin(credential, role));
+          } catch (requestError) {
+            setError(requestError.response?.data?.message || "Google sign-in could not be completed.");
+          }
+        },
+      });
+      googleButtonRef.current.replaceChildren();
+      window.google.accounts.id.renderButton(googleButtonRef.current, {
+        theme: "outline", size: "large", width: 360, text: "continue_with",
+      });
+    };
+    const existing = document.querySelector('script[src="https://accounts.google.com/gsi/client"]');
+    if (existing) {
+      if (window.google?.accounts?.id) renderGoogleButton();
+      else existing.addEventListener("load", renderGoogleButton, { once: true });
+      return () => existing.removeEventListener("load", renderGoogleButton);
+    }
+    const script = document.createElement("script");
+    script.src = "https://accounts.google.com/gsi/client";
+    script.async = true;
+    script.onload = renderGoogleButton;
+    document.head.appendChild(script);
+    return undefined;
+  }, [googleClientId, role]);
 
   return (
     <div className="google-login-page">
@@ -161,10 +157,16 @@ export default function Login() {
           <div className="google-login-heading">
             <span>Welcome back</span>
             <h2>Sign in to Tofado</h2>
-            <p>Access your merchant workspace securely.</p>
+            <p>No password needed. We will email you a secure six-digit code.</p>
           </div>
 
-          <form className="google-login-form" onSubmit={submit}>
+          <div className="google-role-picker" aria-label="Account type">
+            {[["", "Existing account"], ["retailer", "Retailer"], ["wholesaler", "Wholesaler"]].map(([value, label]) => (
+              <button key={label} type="button" className={role === value ? "active" : ""} onClick={() => setRole(value)}>{label}</button>
+            ))}
+          </div>
+
+          <form className="google-login-form" onSubmit={stage === "email" ? sendCode : verifyCode}>
             <label>
               <span>Email address</span>
 
@@ -173,66 +175,23 @@ export default function Login() {
 
                 <input
                   type="email"
-                  value={form.email}
+                  value={email}
                   autoComplete="email"
                   placeholder="you@business.com"
-                  onChange={(event) =>
-                    updateField("email", event.target.value)
-                  }
+                  onChange={(event) => { setEmail(event.target.value); setError(""); }}
+                  disabled={stage === "code"}
                   required
                 />
               </div>
             </label>
 
-            <label>
-              <span>Password</span>
-
-              <div className="google-login-control">
-                <LockKeyhole size={18} />
-
-                <input
-                  type={showPassword ? "text" : "password"}
-                  value={form.password}
-                  autoComplete="current-password"
-                  placeholder="Enter your password"
-                  onChange={(event) =>
-                    updateField("password", event.target.value)
-                  }
-                  required
-                />
-
-                <button
-                  type="button"
-                  className="google-password-toggle"
-                  onClick={() =>
-                    setShowPassword((current) => !current)
-                  }
-                  aria-label={
-                    showPassword
-                      ? "Hide password"
-                      : "Show password"
-                  }
-                >
-                  {showPassword ? (
-                    <EyeOff size={18} />
-                  ) : (
-                    <Eye size={18} />
-                  )}
-                </button>
+            {stage === "code" && <label>
+              <span>Verification code</span>
+              <div className="google-login-control google-code-control">
+                <ShieldCheck size={18} />
+                <input type="text" inputMode="numeric" autoComplete="one-time-code" value={code} maxLength={6} placeholder="000000" onChange={(event) => { setCode(event.target.value.replace(/\D/g, "").slice(0, 6)); setError(""); }} required />
               </div>
-            </label>
-
-            <div className="google-login-options">
-              <label className="google-remember">
-                <input type="checkbox" />
-                <span>Remember me</span>
-              </label>
-
-              <Link to="/forgot-password" className="google-forgot-link">
-                <KeyRound size={14} />
-                Forgot password?
-              </Link>
-            </div>
+            </label>}
 
             {error && (
               <div className="google-login-alert" role="alert">
@@ -243,28 +202,33 @@ export default function Login() {
             <button
               type="submit"
               className="google-login-submit"
-              disabled={loading}
+              disabled={loading || sending || (stage === "code" && code.length !== 6)}
             >
-              {loading ? (
+              {loading || sending ? (
                 <>
                   <LoaderCircle
                     size={18}
                     className="google-login-spinner"
                   />
-                  Signing in...
+                  {stage === "email" ? "Sending code..." : "Verifying..."}
                 </>
               ) : (
                 <>
-                  Sign in
+                  {stage === "email" ? "Continue with email" : "Verify and sign in"}
                   <ArrowRight size={18} />
                 </>
               )}
             </button>
+            {stage === "code" && <button type="button" className="google-login-secondary" onClick={() => { setStage("email"); setCode(""); setError(""); }}>Use another email</button>}
           </form>
 
           <div className="google-login-divider">
-            <span>New to Tofado?</span>
+            <span>or</span>
           </div>
+
+          {googleClientId ? <div className="google-signin-button" ref={googleButtonRef} /> : <div className="google-login-alert">Google sign-in is not configured.</div>}
+
+          <div className="google-login-divider"><span>New to Tofado?</span></div>
 
           <Link to="/Register" className="google-create-account">
             <span className="google-create-icon">
@@ -279,34 +243,6 @@ export default function Login() {
             <ArrowRight size={17} />
           </Link>
 
-          <details className="google-demo-panel">
-            <summary>Use a demo account</summary>
-
-            <div className="google-demo-list">
-              {demoAccounts.map((account) => {
-                const Icon = account.icon;
-
-                return (
-                  <button
-                    type="button"
-                    key={account.email}
-                    onClick={() => useDemoAccount(account)}
-                  >
-                    <span className="google-demo-icon">
-                      <Icon size={18} />
-                    </span>
-
-                    <span className="google-demo-copy">
-                      <strong>{account.label}</strong>
-                      <small>{account.description}</small>
-                    </span>
-
-                    <ArrowRight size={16} />
-                  </button>
-                );
-              })}
-            </div>
-          </details>
         </section>
       </main>
 

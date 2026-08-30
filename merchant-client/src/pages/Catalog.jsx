@@ -112,7 +112,7 @@ function normalizeProduct(product = {}) {
 }
 
 function formatMoney(value) {
-  return Number(value || 0).toLocaleString("en-SA", {
+  return Number(value || 0).toLocaleString("en-IN", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
@@ -1182,7 +1182,7 @@ const publicUrl = useMemo(() => {
                       <strong>
                         {product.price_mode === "quote"
                           ? "Price on request"
-                          : `SAR ${formatMoney(product.price)}`}
+                          : `INR ${formatMoney(product.price)}`}
                       </strong>
                       <small>
                         {product.price_mode === "quote"
@@ -1773,7 +1773,7 @@ const publicUrl = useMemo(() => {
 
                         {productForm.price_mode === "fixed" && (
                           <label>
-                            <span>Wholesale price (SAR) *</span>
+                            <span>Wholesale price (INR) *</span>
 
                             <input
                               required
@@ -1995,7 +1995,7 @@ const publicUrl = useMemo(() => {
                               <dd>
                                 {productForm.price_mode === "quote"
                                   ? "Price on request"
-                                  : `SAR ${formatMoney(
+                                  : `INR ${formatMoney(
                                       productForm.price
                                     )}`}
                               </dd>

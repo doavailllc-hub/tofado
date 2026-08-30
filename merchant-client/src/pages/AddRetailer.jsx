@@ -225,7 +225,7 @@ export default function AddRetailer() {
             <label className="retailer-field">
               <span>Credit limit</span>
               <div className="retailer-money-input">
-                <span>SAR</span>
+                <span>INR</span>
                 <input
                   type="number"
                   min="0"

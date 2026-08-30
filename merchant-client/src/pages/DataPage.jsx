@@ -305,7 +305,7 @@ function formatDate(value) {
 
   if (Number.isNaN(date.getTime())) return value;
 
-  return new Intl.DateTimeFormat("en-SA", {
+  return new Intl.DateTimeFormat("en-IN", {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -318,7 +318,7 @@ function formatValue(key, value) {
   }
 
   if (isAmountKey(key)) {
-    return `SAR ${Number(value).toLocaleString("en-SA", {
+    return `INR ${Number(value).toLocaleString("en-IN", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     })}`;
@@ -730,8 +730,8 @@ const openRow = (row) => {
           <div>
             <span>Recorded value</span>
             <strong>
-              SAR{" "}
-              {summary.value.toLocaleString("en-SA", {
+              INR{" "}
+              {summary.value.toLocaleString("en-IN", {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
               })}

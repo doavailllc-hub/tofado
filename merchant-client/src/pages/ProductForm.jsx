@@ -132,8 +132,8 @@ export default function ProductForm() {
     const value = Number(form.price || 0);
 
     return Number.isFinite(value)
-      ? `SAR ${value.toFixed(2)}`
-      : "SAR 0.00";
+      ? `INR ${value.toFixed(2)}`
+      : "INR 0.00";
   }, [form.price, form.price_mode]);
 
   const updateField = (key, value) => {
@@ -480,7 +480,7 @@ export default function ProductForm() {
 
               {form.price_mode === "fixed" && (
                 <label className="product-form-field">
-                  <span>Unit price (SAR)</span>
+                  <span>Unit price (INR)</span>
 
                   <input
                     required
