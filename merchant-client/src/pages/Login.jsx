@@ -23,7 +23,7 @@ const benefits = [
 export default function Login() {
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
-  const [role, setRole] = useState("");
+  const [role, setRole] = useState("retailer");
   const [stage, setStage] = useState("email");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
@@ -161,7 +161,7 @@ export default function Login() {
           </div>
 
           <div className="google-role-picker" aria-label="Account type">
-            {[["", "Existing account"], ["retailer", "Retailer"], ["wholesaler", "Wholesaler"]].map(([value, label]) => (
+            {[["retailer", "Retailer"], ["wholesaler", "Wholesaler"]].map(([value, label]) => (
               <button key={label} type="button" className={role === value ? "active" : ""} onClick={() => setRole(value)}>{label}</button>
             ))}
           </div>
