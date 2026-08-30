@@ -18,6 +18,8 @@ import {
   Search,
   ShoppingCart,
   Store,
+  Ban,
+  Trash2,
   Truck,
   Users,
   Wallet,
@@ -538,6 +540,34 @@ const openRow = (row) => {
     }
   };
 
+  const unapproveWholesaler = async (row) => {
+    if (!window.confirm(`Unapprove ${row.business_name || row.name}? They will lose access immediately.`)) return;
+    try {
+      setUpdatingId(row.id);
+      setError("");
+      await api.patch(`/admin/wholesalers/${row.id}/unapprove`);
+      setRows((currentRows) => currentRows.map((item) => item.id === row.id ? { ...item, status: "suspended" } : item));
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || "Unable to unapprove this wholesaler.");
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const deleteWholesaler = async (row) => {
+    if (!window.confirm(`Permanently delete ${row.business_name || row.name}? This cannot be undone.`)) return;
+    try {
+      setUpdatingId(row.id);
+      setError("");
+      await api.delete(`/admin/wholesalers/${row.id}`);
+      setRows((currentRows) => currentRows.filter((item) => item.id !== row.id));
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || "Unable to delete this wholesaler.");
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
   const filteredRows = useMemo(() => {
     if (!rows) return [];
 
@@ -771,6 +801,7 @@ const openRow = (row) => {
                 <option value="delivered">Delivered</option>
                 <option value="paid">Paid</option>
                 <option value="active">Active</option>
+                <option value="suspended">Suspended</option>
                 <option value="cancelled">Cancelled</option>
               </select>
             </div>
@@ -831,6 +862,7 @@ const openRow = (row) => {
                       ))}
 
                       {config.actions && <th>Update status</th>}
+                      {type === "admin-users" && <th>Actions</th>}
                       {type === "retailer-orders" && (
                         <th aria-label="Open order" />
                       )}
@@ -964,6 +996,14 @@ className={
                             </div>
                           </td>
                         )}
+                        {type === "admin-users" && (
+                          <td>
+                            {row.role === "wholesaler" ? <div className="admin-wholesaler-actions">
+                              <button type="button" className="admin-unapprove-button" disabled={updatingId === row.id || row.status === "suspended"} onClick={() => unapproveWholesaler(row)}><Ban size={15} />Unapprove</button>
+                              <button type="button" className="admin-delete-button" disabled={updatingId === row.id} onClick={() => deleteWholesaler(row)}><Trash2 size={15} />Delete</button>
+                            </div> : <span className="data-muted-action">—</span>}
+                          </td>
+                        )}
                         {type === "retailer-orders" && (
                           <td className="retailer-order-open-cell">
                             <ChevronRight size={18} />
@@ -1061,6 +1101,12 @@ className={
                           </option>
                         ))}
                       </select>
+                    </div>
+                  )}
+                  {type === "admin-users" && row.role === "wholesaler" && (
+                    <div className="admin-wholesaler-actions admin-wholesaler-actions-mobile">
+                      <button type="button" className="admin-unapprove-button" disabled={updatingId === row.id || row.status === "suspended"} onClick={() => unapproveWholesaler(row)}><Ban size={15} />Unapprove</button>
+                      <button type="button" className="admin-delete-button" disabled={updatingId === row.id} onClick={() => deleteWholesaler(row)}><Trash2 size={15} />Delete</button>
                     </div>
                   )}
                 </article>

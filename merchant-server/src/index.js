@@ -1346,6 +1346,58 @@ app.patch(
   }
 );
 app.get('/api/admin/users', auth, allow('admin'), async (req, res) => res.json(await q("SELECT id,business_name,role,name,phone,location,status,created_at FROM users WHERE role!='admin' ORDER BY id DESC")));
+app.patch('/api/admin/wholesalers/:id/unapprove', auth, allow('admin'), async (req, res, next) => {
+  const connection = await pool.getConnection();
+  try {
+    const wholesalerId = Number(req.params.id);
+    if (!Number.isInteger(wholesalerId) || wholesalerId <= 0) {
+      return res.status(400).json({ message: 'Invalid wholesaler.' });
+    }
+    await connection.beginTransaction();
+    const [[wholesaler]] = await connection.query("SELECT id FROM users WHERE id=? AND role='wholesaler' LIMIT 1 FOR UPDATE", [wholesalerId]);
+    if (!wholesaler) {
+      await connection.rollback();
+      return res.status(404).json({ message: 'Wholesaler not found.' });
+    }
+    await connection.query("UPDATE users SET status='suspended', verification_status='rejected', updated_at=CURRENT_TIMESTAMP WHERE id=?", [wholesalerId]);
+    await connection.query("UPDATE auth_sessions SET revoked_at=CURRENT_TIMESTAMP WHERE user_id=? AND revoked_at IS NULL", [wholesalerId]);
+    await connection.commit();
+    return res.json({ message: 'Wholesaler unapproved and access revoked.', status: 'suspended' });
+  } catch (error) {
+    await connection.rollback();
+    next(error);
+  } finally {
+    connection.release();
+  }
+});
+app.delete('/api/admin/wholesalers/:id', auth, allow('admin'), async (req, res, next) => {
+  const connection = await pool.getConnection();
+  try {
+    const wholesalerId = Number(req.params.id);
+    if (!Number.isInteger(wholesalerId) || wholesalerId <= 0) {
+      return res.status(400).json({ message: 'Invalid wholesaler.' });
+    }
+    await connection.beginTransaction();
+    const [[wholesaler]] = await connection.query("SELECT id,email FROM users WHERE id=? AND role='wholesaler' LIMIT 1 FOR UPDATE", [wholesalerId]);
+    if (!wholesaler) {
+      await connection.rollback();
+      return res.status(404).json({ message: 'Wholesaler not found.' });
+    }
+    await connection.query('DELETE FROM auth_sessions WHERE user_id=?', [wholesalerId]);
+    await connection.query('DELETE FROM email_login_codes WHERE email=?', [wholesaler.email]);
+    await connection.query("DELETE FROM users WHERE id=? AND role='wholesaler'", [wholesalerId]);
+    await connection.commit();
+    return res.json({ message: 'Wholesaler deleted permanently.' });
+  } catch (error) {
+    await connection.rollback();
+    if (error?.code === 'ER_ROW_IS_REFERENCED_2' || error?.errno === 1451) {
+      return res.status(409).json({ message: 'This wholesaler has business records and cannot be deleted. Use Unapprove to disable access while preserving order and accounting history.' });
+    }
+    next(error);
+  } finally {
+    connection.release();
+  }
+});
 app.get('/api/admin/orders', auth, allow('admin'), async (req, res) => res.json(await q(`SELECT o.id,o.order_no,r.business_name retailer_name,w.business_name wholesaler_name,o.status,o.total_amount,o.created_at FROM purchase_orders o JOIN users r ON r.id=o.retailer_id JOIN users w ON w.id=o.wholesaler_id ORDER BY o.id DESC`)));
 app.get('/api/admin/finance', auth, allow('admin'), async (req, res) => res.json(await q(`SELECT i.id,i.invoice_no,r.business_name retailer_name,w.business_name wholesaler_name,i.total_amount,i.paid_amount,i.status,i.due_date FROM invoices i JOIN users r ON r.id=i.retailer_id JOIN users w ON w.id=i.wholesaler_id ORDER BY i.id DESC`)));
 app.get('/api/admin/dashboard', auth, allow('admin'), async (req, res) => { const [[u]] = await pool.query(`SELECT SUM(role='retailer') retailers,SUM(role='wholesaler') wholesalers FROM users WHERE status='active'`); const [[a]] = await pool.query(`SELECT COUNT(*) pending_verifications FROM merchant_applications WHERE status='pending'`); const [[o]] = await pool.query(`SELECT COUNT(*) total_orders,COALESCE(SUM(total_amount),0) order_value FROM purchase_orders`); const recent = await q(`SELECT o.id,o.order_no,CONCAT(r.business_name,' → ',w.business_name) business_name,o.created_at,o.status,o.total_amount FROM purchase_orders o JOIN users r ON r.id=o.retailer_id JOIN users w ON w.id=o.wholesaler_id ORDER BY o.id DESC LIMIT 8`); res.json({ stats: { retailers: u.retailers || 0, wholesalers: u.wholesalers || 0, pending_verifications: a.pending_verifications, total_orders: o.total_orders, order_value: `INR ${Number(o.order_value).toFixed(2)}` }, recent }) });
