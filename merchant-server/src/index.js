@@ -546,7 +546,7 @@ app.post("/api/auth/email/verify", async (req, res, next) => {
       await connection.rollback();
       return res.status(403).json({ message: "Your merchant account is awaiting approval." });
     }
-    if (user && ["retailer", "wholesaler"].includes(role) && user.role !== role) {
+    if (user && ["retailer", "wholesaler"].includes(user.role) && ["retailer", "wholesaler"].includes(role) && user.role !== role) {
       await connection.rollback();
       return res.status(403).json({
         message: `This account belongs to the Tofado ${user.role} app.`,
@@ -642,7 +642,7 @@ app.post("/api/auth/google", async (req, res, next) => {
       if (user.google_sub && user.google_sub !== identity.sub) {
         return res.status(409).json({ message: "This email is linked to another Google account." });
       }
-      if (["retailer", "wholesaler"].includes(role) && user.role !== role) {
+      if (["retailer", "wholesaler"].includes(user.role) && ["retailer", "wholesaler"].includes(role) && user.role !== role) {
         return res.status(403).json({
           message: `This account belongs to the Tofado ${user.role} app.`,
         });
