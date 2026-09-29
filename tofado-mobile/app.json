@@ -1,0 +1,43 @@
+{
+  "expo": {
+    "name": "Tofado",
+    "slug": "tofado",
+    "scheme": "tofado",
+    "version": "1.4.0",
+    "orientation": "portrait",
+    "icon": "./assets/tofado-icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "config": {
+        "usesNonExemptEncryption": false
+      },
+      "bundleIdentifier": "com.tofado.app"
+    },
+    "android": {
+      "package": "com.tofado.app",
+      "versionCode": 9,
+      "softwareKeyboardLayoutMode": "resize",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/tofado-icon.png",
+        "backgroundColor": "#EAF6F0"
+      }
+    },
+    "extra": {
+      "apiUrl": "https://api.tofado.com/api"
+    },
+    "plugins": [
+      "expo-status-bar",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Tofado to select business and order photos."
+        }
+      ],
+      "expo-sharing",
+      "expo-web-browser",
+      "expo-secure-store",
+      "expo-font"
+    ]
+  }
+}

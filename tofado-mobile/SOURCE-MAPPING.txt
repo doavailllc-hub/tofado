@@ -1,0 +1,13 @@
+Built from uploaded tofado-production.zip
+
+Web auth source:
+merchant-client/src/context/AuthContext.jsx
+merchant-client/src/services/api.js
+
+Backend endpoints used in Stage 1:
+POST /api/auth/login
+GET /api/auth/me
+GET /api/retailer/dashboard
+GET /api/wholesaler/dashboard
+
+The existing backend remains the single source of business data.

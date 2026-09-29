@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import {
   ArrowRight,
   CheckCircle2,
@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "../context/AuthContext";
+import { accountDestination } from '../services/navigation';
 import logo from "../assets/tofado-logo.png";
 import "./Login-Google.css";
 
@@ -29,11 +30,12 @@ export default function Login() {
   const [error, setError] = useState("");
   const googleButtonRef = useRef(null);
 
-  const { requestEmailCode, verifyEmailCode, googleLogin, loading } = useAuth();
+  const { user, booting, sessionError, restoreSession, logout, requestEmailCode, verifyEmailCode, googleLogin, loading } = useAuth();
+  const location = useLocation();
   const navigate = useNavigate();
   const googleClientId = import.meta.env.VITE_GOOGLE_WEB_CLIENT_ID;
 
-  const finishLogin = (user) => navigate(`/${user.role}`, { replace: true });
+  const finishLogin = (user) => navigate(accountDestination(user, location.state?.from), { replace: true });
 
   const sendCode = async (event) => {
     event.preventDefault();
@@ -60,7 +62,7 @@ export default function Login() {
   };
 
   useEffect(() => {
-    if (!googleClientId) return undefined;
+    if (!googleClientId || booting || sessionError || user) return undefined;
     const renderGoogleButton = () => {
       if (!window.google?.accounts?.id || !googleButtonRef.current) return;
       window.google.accounts.id.initialize({
@@ -90,8 +92,12 @@ export default function Login() {
     script.async = true;
     script.onload = renderGoogleButton;
     document.head.appendChild(script);
-    return undefined;
-  }, [googleClientId, role]);
+    return () => { script.onload = null; };
+  }, [googleClientId, role, booting, sessionError, user, location.state?.from]);
+
+  if (booting) return <main role="status" style={{ padding: 32 }}>Loading your account...</main>;
+  if (sessionError) return <main role="alert" style={{ padding: 32 }}><p>{sessionError}</p><button onClick={restoreSession}>Try again</button> <button onClick={logout}>Sign out</button></main>;
+  if (user) return <Navigate to={accountDestination(user, location.state?.from)} replace />;
 
   return (
     <div className="google-login-page">

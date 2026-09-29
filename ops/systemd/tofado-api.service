@@ -1,0 +1,27 @@
+[Unit]
+Description=Tofado API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=tofado
+Group=tofado
+WorkingDirectory=/opt/tofado/current/server
+EnvironmentFile=/opt/tofado/shared/server.env
+ExecStart=/usr/bin/node src/index.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+KillSignal=SIGTERM
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/tofado/shared
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=tofado-api
+
+[Install]
+WantedBy=multi-user.target

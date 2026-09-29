@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import {
   Navigate,
   Route,
@@ -7,35 +8,37 @@ import {
 import Layout from "./components/Layout";
 import ProtectedRoute from "./components/ProtectedRoute";
 
-import Login from "./pages/Login";
-import Register from "./pages/Register";
-import Dashboard from "./pages/Dashboard";
-import DataPage from "./pages/DataPage";
-import Profile from "./pages/Profile";
-import NewOrder from "./pages/NewOrder";
-import RetailerOrderDetails from "./pages/RetailerOrderDetails";
-import RetailerInvoiceDetails from "./pages/RetailerInvoiceDetails";
-import Catalog from "./pages/Catalog";
-import ProductForm from "./pages/ProductForm";
-import CatalogOrders from "./pages/CatalogOrders";
-import CatalogEnquiries from "./pages/CatalogEnquiries";
-import PublicCatalog from "./pages/PublicCatalog";
-import AdminRequests from "./pages/AdminRequests";
-import AddRetailer from "./pages/AddRetailer";
-import AddRetailerFromEnquiry from "./pages/AddRetailerFromEnquiry";
-import RetailerDetails from "./pages/RetailerDetails";
-import DeliveryList from "./pages/DeliveryList";
-import DeliveryDetails from "./pages/DeliveryDetails";
-import InvoiceDetails from "./pages/InvoiceDetails";
-import PaymentList from "./pages/PaymentList";
-import RecordPayment from "./pages/RecordPayment";
-import PaymentDetails from "./pages/PaymentDetails";
-import RetailerWholesalers from "./pages/RetailerWholesalers";
-import RetailerConnectedWholesalers from "./pages/RetailerConnectedWholesalers";
-import RetailerWholesalerRequests from "./pages/RetailerWholesalerRequests";
-import WholesalerRetailerRequests from "./pages/WholesalerRetailerRequests";
+const Login = lazy(() => import('./pages/Login'));
+const Register = lazy(() => import('./pages/Register'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const DataPage = lazy(() => import('./pages/DataPage'));
+const Profile = lazy(() => import('./pages/Profile'));
+const NewOrder = lazy(() => import('./pages/NewOrder'));
+const RetailerOrderDetails = lazy(() => import('./pages/RetailerOrderDetails'));
+const WholesalerOrderDetails = lazy(() => import('./pages/WholesalerOrderDetails'));
+const RetailerInvoiceDetails = lazy(() => import('./pages/RetailerInvoiceDetails'));
+const Catalog = lazy(() => import('./pages/Catalog'));
+const ProductForm = lazy(() => import('./pages/ProductForm'));
+const CatalogOrders = lazy(() => import('./pages/CatalogOrders'));
+const CatalogEnquiries = lazy(() => import('./pages/CatalogEnquiries'));
+const PublicCatalog = lazy(() => import('./pages/PublicCatalog'));
+const AdminRequests = lazy(() => import('./pages/AdminRequests'));
+const AddRetailer = lazy(() => import('./pages/AddRetailer'));
+const AddRetailerFromEnquiry = lazy(() => import('./pages/AddRetailerFromEnquiry'));
+const RetailerDetails = lazy(() => import('./pages/RetailerDetails'));
+const DeliveryList = lazy(() => import('./pages/DeliveryList'));
+const DeliveryDetails = lazy(() => import('./pages/DeliveryDetails'));
+const InvoiceDetails = lazy(() => import('./pages/InvoiceDetails'));
+const PaymentList = lazy(() => import('./pages/PaymentList'));
+const RecordPayment = lazy(() => import('./pages/RecordPayment'));
+const PaymentDetails = lazy(() => import('./pages/PaymentDetails'));
+const RetailerWholesalers = lazy(() => import('./pages/RetailerWholesalers'));
+const RetailerConnectedWholesalers = lazy(() => import('./pages/RetailerConnectedWholesalers'));
+const RetailerWholesalerRequests = lazy(() => import('./pages/RetailerWholesalerRequests'));
+const WholesalerRetailerRequests = lazy(() => import('./pages/WholesalerRetailerRequests'));
 export default function App() {
   return (
+    <Suspense fallback={<main role="status" style={{ padding: 32 }}>Loading...</main>}>
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
@@ -106,6 +109,7 @@ export default function App() {
         }
       >
         <Route path="/wholesaler" element={<Dashboard />} />
+        <Route path="/wholesaler/orders/:id" element={<WholesalerOrderDetails />} />
 
         <Route
           path="/wholesaler/catalog"
@@ -162,13 +166,6 @@ export default function App() {
           path="/wholesaler/orders"
           element={
             <DataPage type="wholesaler-orders" />
-          }
-        />
-
-        <Route
-          path="/wholesaler/deliveries"
-          element={
-            <DataPage type="wholesaler-deliveries" />
           }
         />
 
@@ -246,5 +243,6 @@ export default function App() {
         element={<Navigate to="/login" replace />}
       />
     </Routes>
+    </Suspense>
   );
 }

@@ -29,9 +29,9 @@ export default function Footer() {
 
         <div>
           <h4>Resources</h4>
-          <a href="#faq">Help center</a>
-          <a href="#privacy">Privacy</a>
-          <a href="#terms">Terms</a>
+          <Link to="/contact">Help center</Link>
+          {import.meta.env.VITE_PRIVACY_URL && <a href={import.meta.env.VITE_PRIVACY_URL}>Privacy</a>}
+          {import.meta.env.VITE_TERMS_URL && <a href={import.meta.env.VITE_TERMS_URL}>Terms</a>}
         </div>
       </div>
 

@@ -5,13 +5,29 @@
   "main": "src/index.js",
   "scripts": {
     "dev": "nodemon src/index.js",
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "test": "node --test test/*.test.js",
+    "db:check": "node scripts/check-schema.js",
+    "finance:check": "node scripts/check-finance.js",
+    "db:migrate": "node scripts/migrate.js",
+    "schema:export": "node scripts/export-schema.js",
+    "staging:start": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/staging-start.ps1",
+    "staging:status": "node scripts/staging-status.js",
+    "staging:stop": "node scripts/staging-stop.js",
+    "staging:import": "node scripts/staging-import.js",
+    "staging:check": "node scripts/staging-run.js check",
+    "staging:finance": "node scripts/staging-run.js finance",
+    "staging:test": "node scripts/staging-run.js test",
+    "staging:migrate": "node scripts/staging-run.js migrate",
+    "staging:api": "node scripts/staging-run.js api",
+    "staging:prepare": "node scripts/staging-prepare.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1101.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "express-rate-limit": "^8.7.0",
     "google-auth-library": "^11.0.2",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.2.0",
@@ -20,5 +36,8 @@
   },
   "devDependencies": {
     "nodemon": "^3.1.9"
+  },
+  "overrides": {
+    "qs": "^6.16.0"
   }
 }

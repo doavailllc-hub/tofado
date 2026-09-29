@@ -1,0 +1,75 @@
+// Add BEFORE your final 404 handler and app.listen() ONLY if these routes are missing.
+
+app.get(
+  "/api/wholesaler/retailer-requests",
+  auth,
+  allow("wholesaler"),
+  async (req, res, next) => {
+    try {
+      const requests = await q(`
+        SELECT
+          wr.id AS connection_id,
+          wr.retailer_id,
+          wr.status,
+          wr.requested_by,
+          wr.request_message,
+          wr.created_at AS requested_at,
+          u.business_name,
+          u.name,
+          u.phone,
+          u.email,
+          u.location,
+          u.logo_url
+        FROM wholesaler_retailers wr
+        INNER JOIN users u
+          ON u.id = wr.retailer_id
+         AND u.role = 'retailer'
+        WHERE wr.wholesaler_id = ?
+          AND wr.status = 'pending'
+          AND wr.requested_by = 'retailer'
+        ORDER BY wr.created_at ASC
+      `, [Number(req.user.id)]);
+
+      res.json({ requests });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+app.patch(
+  "/api/wholesaler/retailer-requests/:id",
+  auth,
+  allow("wholesaler"),
+  async (req, res, next) => {
+    try {
+      const connectionId = Number(req.params.id);
+      const action = String(req.body?.action || "").toLowerCase();
+
+      if (!["accept", "reject"].includes(action)) {
+        return res.status(400).json({ message: "Action must be accept or reject." });
+      }
+
+      const status = action === "accept" ? "active" : "rejected";
+
+      const result = await q(`
+        UPDATE wholesaler_retailers
+        SET status = ?, responded_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+          AND wholesaler_id = ?
+          AND status = 'pending'
+      `, [status, connectionId, Number(req.user.id)]);
+
+      if (!result.affectedRows) {
+        return res.status(404).json({ message: "Pending retailer request not found." });
+      }
+
+      res.json({
+        message: action === "accept" ? "Retailer connected." : "Request rejected.",
+        status,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);

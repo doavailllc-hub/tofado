@@ -58,6 +58,7 @@ const EMPTY_PROFILE = {
   location: "",
   address: "",
   tax_number: "",
+  license_number: "",
   business_category: "",
   shop_type: "",
   description: "",
@@ -88,7 +89,7 @@ function validateProfile(profile) {
 }
 
 export default function Profile() {
-  const { user } = useAuth();
+  const { user, restoreSession } = useAuth();
   const fileInputRef = useRef(null);
 
   const [form, setForm] = useState(null);
@@ -249,6 +250,16 @@ export default function Profile() {
     }
   };
 
+  const submitVerification = async () => {
+    if (saving) return;
+    setSaving(true); setError(''); setMessage('');
+    try {
+      await api.post('/wholesaler/verification', form);
+      await restoreSession();
+    } catch (requestError) { setError(requestError.response?.data?.message || 'Unable to submit verification.'); }
+    finally { setSaving(false); }
+  };
+
   const saveProfile = async (event) => {
     event.preventDefault();
 
@@ -388,8 +399,15 @@ export default function Profile() {
 
             <div className="business-verification-badge">
               <ShieldCheck size={17} />
-              Verified merchant
+              {user.role === 'wholesaler' ? (user.verification_status === 'verified' ? 'Verified merchant' : 'Verification: ' + (user.verification_status || 'draft')) : 'Retailer account'}
             </div>
+
+            {user.role === 'wholesaler' && user.verification_status !== 'verified' && <section aria-label="Business verification">
+              <p>{user.verification_status === 'pending' ? 'Your business is awaiting review. Refresh your account after approval.' : 'Complete your business details, tax number, license number and logo, then submit for review.'}</p>
+              <label>License number<input value={form.license_number || ''} onChange={event => updateField('license_number', event.target.value)} maxLength={100} /></label>
+              <button type="button" onClick={submitVerification} disabled={saving || user.verification_status === 'pending'}>{saving ? 'Submitting?' : 'Submit for verification'}</button>
+              <button type="button" onClick={restoreSession}>Refresh approval status</button>
+            </section>}
 
             <div className="business-logo-actions">
               <button

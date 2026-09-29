@@ -110,9 +110,12 @@ const menus = {
     },
     {
       label: "Orders",
-      path: "/wholesaler/catalog-orders",
       icon: ShoppingCart,
       color: "amber",
+      children: [
+        { label: "Purchase orders", path: "/wholesaler/orders" },
+        { label: "Catalog orders", path: "/wholesaler/catalog-orders" },
+      ],
     },
     {
       label: "Deliveries",

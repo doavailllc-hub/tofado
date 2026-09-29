@@ -1,0 +1,25 @@
+name: Production synthetic monitor
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-synthetic-monitor
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - run: node ops/monitor/health-check.mjs
+        env:
+          API_URL: ${{ vars.PRODUCTION_API_URL }}
+          MERCHANT_URL: ${{ vars.PRODUCTION_MERCHANT_URL }}
+          PUBLIC_URL: ${{ vars.PRODUCTION_PUBLIC_URL }}

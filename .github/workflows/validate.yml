@@ -1,0 +1,37 @@
+name: Validate
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+permissions:
+  contents: read
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            merchant-server/package-lock.json
+            merchant-client/package-lock.json
+            landing/package-lock.json
+            tofado-mobile/package-lock.json
+      - run: npm ci
+      - run: npm run install:all
+      - run: npm test
+      - run: npm run security:secrets
+      - run: npm run build
+      - name: Check mobile JavaScript bundle
+        working-directory: tofado-mobile
+        run: node node_modules/expo/bin/cli export --platform android --output-dir .audit-export
+        env:
+          CI: '1'
+          EXPO_NO_DOTENV: '1'
+      - name: Audit backend production dependencies
+        working-directory: merchant-server
+        run: npm audit --omit=dev --audit-level=moderate

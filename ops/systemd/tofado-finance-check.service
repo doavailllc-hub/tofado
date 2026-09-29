@@ -1,0 +1,18 @@
+[Unit]
+Description=Tofado read-only financial integrity check
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=tofado
+Group=tofado
+WorkingDirectory=/opt/tofado/current/server
+EnvironmentFile=/opt/tofado/shared/server.env
+ExecStart=/usr/bin/node scripts/check-finance.js
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=tofado-finance-check

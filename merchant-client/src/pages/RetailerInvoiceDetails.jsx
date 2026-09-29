@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -58,6 +58,7 @@ export default function RetailerInvoiceDetails() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const paymentRequestKey = useRef(null);
 
   const [payment, setPayment] = useState({
     amount: "",
@@ -156,6 +157,7 @@ export default function RetailerInvoiceDetails() {
         return;
       }
 
+      paymentRequestKey.current ||= `web:${crypto.randomUUID()}`;
       const { data } = await api.post(
         `/retailer/invoices/${id}/payments`,
         {
@@ -163,8 +165,11 @@ export default function RetailerInvoiceDetails() {
           method: payment.method,
           reference_no:
             payment.reference_no.trim() || null,
-        }
+        },
+        { headers: { "Idempotency-Key": paymentRequestKey.current } }
       );
+
+      paymentRequestKey.current = null;
 
       setNotice(
         data?.message ||

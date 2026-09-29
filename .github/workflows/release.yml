@@ -1,0 +1,176 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Deployment environment
+        required: true
+        type: choice
+        options: [staging, production]
+      run_migrations:
+        description: Run approved forward-only migrations
+        required: true
+        type: boolean
+        default: false
+      backup_reference:
+        description: Required restore point or snapshot reference when migrations run
+        required: false
+        type: string
+      staging_release_id:
+        description: Production only - release ID accepted in staging
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            merchant-server/package-lock.json
+            merchant-client/package-lock.json
+            landing/package-lock.json
+            tofado-mobile/package-lock.json
+      - run: npm ci
+      - run: npm run install:all
+      - run: npm test
+      - run: npm run build
+        env:
+          VITE_API_URL: /api
+          VITE_MERCHANT_API_URL: /api
+          VITE_MERCHANT_APP_URL: ${{ vars.MERCHANT_APP_URL }}
+          VITE_PRIVACY_URL: ${{ vars.PRIVACY_URL }}
+          VITE_TERMS_URL: ${{ vars.TERMS_URL }}
+      - name: Require a restore point for migrations
+        if: inputs.run_migrations && inputs.backup_reference == ''
+        run: echo 'backup_reference is required when run_migrations is enabled' && exit 1
+      - name: Validate restore point reference
+        if: inputs.run_migrations
+        shell: bash
+        env:
+          BACKUP_REFERENCE: ${{ inputs.backup_reference }}
+        run: [[ "$BACKUP_REFERENCE" =~ ^[A-Za-z0-9._:/=-]{3,200}$ ]] || { echo 'backup_reference contains unsupported characters'; exit 1; }
+      - name: Require promotion of the tested staging commit
+        if: inputs.environment == 'production'
+        shell: bash
+        env:
+          STAGING_RELEASE_ID: ${{ inputs.staging_release_id }}
+        run: test "$STAGING_RELEASE_ID" = "${GITHUB_SHA::12}" || { echo 'Production must use the release ID accepted in staging.'; exit 1; }
+
+  package:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: ${{ inputs.environment }}
+      url: ${{ vars.PUBLIC_URL }}
+    outputs:
+      release_id: ${{ steps.meta.outputs.release_id }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: merchant-server/package-lock.json
+      - run: npm ci --omit=dev --prefix merchant-server
+      - name: Build release web assets
+        run: |
+          npm ci --prefix merchant-client
+          npm ci --prefix landing
+          npm run build --prefix merchant-client
+          npm run build --prefix landing
+        env:
+          VITE_API_URL: /api
+          VITE_MERCHANT_API_URL: /api
+          VITE_MERCHANT_APP_URL: ${{ vars.MERCHANT_APP_URL }}
+          VITE_PRIVACY_URL: ${{ vars.PRIVACY_URL }}
+          VITE_TERMS_URL: ${{ vars.TERMS_URL }}
+      - id: meta
+        name: Set release identity
+        shell: bash
+        run: echo "release_id=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+      - name: Assemble immutable artifact
+        shell: bash
+        run: bash ops/release/package.sh "${GITHUB_SHA::12}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tofado-${{ steps.meta.outputs.release_id }}
+          path: .release/tofado-*.tar.gz*
+          if-no-files-found: error
+          retention-days: 30
+
+  deploy:
+    needs: package
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: ${{ inputs.environment }}
+      url: ${{ vars.PUBLIC_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: tofado-${{ needs.package.outputs.release_id }}
+          path: .release
+      - name: Configure pinned SSH host
+        shell: bash
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Upload release
+        shell: bash
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+          RELEASE_ID: ${{ needs.package.outputs.release_id }}
+        run: |
+          scp -i ~/.ssh/deploy_key .release/tofado-${RELEASE_ID}.tar.gz .release/tofado-${RELEASE_ID}.tar.gz.sha256 ${USER}@${HOST}:/opt/tofado/incoming/
+          scp -i ~/.ssh/deploy_key ops/release/remote-deploy.sh ops/release/rollback.sh ${USER}@${HOST}:/opt/tofado/bin/
+      - name: Activate and verify
+        id: activate
+        shell: bash
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+          RELEASE_ID: ${{ needs.package.outputs.release_id }}
+          RUN_MIGRATIONS: ${{ inputs.run_migrations && 'yes' || 'no' }}
+          BACKUP_REFERENCE: ${{ inputs.backup_reference }}
+        run: |
+          ssh -i ~/.ssh/deploy_key ${USER}@${HOST} "chmod 750 /opt/tofado/bin/remote-deploy.sh /opt/tofado/bin/rollback.sh && MIGRATION_BACKUP_CONFIRMED='${BACKUP_REFERENCE}' /opt/tofado/bin/remote-deploy.sh '${RELEASE_ID}' '${RUN_MIGRATIONS}'"
+      - name: External smoke test
+        id: smoke
+        env:
+          API_URL: ${{ vars.API_URL }}
+          MERCHANT_URL: ${{ vars.MERCHANT_APP_URL }}
+          PUBLIC_URL: ${{ vars.PUBLIC_URL }}
+          RELEASE_ID: ${{ needs.package.outputs.release_id }}
+        run: node ops/release/smoke-test.mjs
+      - name: Roll back code after failed external smoke test
+        if: failure() && steps.activate.outcome == 'success' && steps.smoke.outcome == 'failure'
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+        run: ssh -i ~/.ssh/deploy_key ${USER}@${HOST} /opt/tofado/bin/rollback.sh

@@ -2,10 +2,14 @@
   "name": "tofado-merchant",
   "private": true,
   "scripts": {
-    "install:all": "npm install --prefix client && npm install --prefix server",
-    "dev": "concurrently \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
-    "build": "npm run build --prefix client",
-    "start": "npm run start --prefix server"
+    "install:all": "npm ci --prefix merchant-server && npm ci --prefix merchant-client && npm ci --prefix landing && npm ci --prefix tofado-mobile",
+    "dev": "concurrently \"npm run dev --prefix merchant-server\" \"npm run dev --prefix merchant-client\"",
+    "build": "npm run build --prefix merchant-client && npm run build --prefix landing",
+    "test": "npm test --prefix merchant-server && npm test --prefix merchant-client && npm test --prefix tofado-mobile",
+    "security:secrets": "node scripts/check-secrets.mjs",
+    "start": "npm run start --prefix merchant-server"
   },
-  "devDependencies": {"concurrently": "^9.0.0"}
+  "devDependencies": {
+    "concurrently": "^9.0.0"
+  }
 }
