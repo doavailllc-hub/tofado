@@ -27,8 +27,14 @@ tofadomerchantkey
 .cxx/
 build/
 release/
+# Keep generated release directories ignored, but version the deployment
+# tooling required by .github/workflows/release.yml.
+!ops/release/
+!ops/release/**
 local.properties
 captures/
+outputs/
+merchant-client/test-results/
 *.hprof
 
 .npm-cache/

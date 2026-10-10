@@ -64,7 +64,7 @@ export default function AddRetailer() {
         credit_limit: form.credit_limit ? Number(form.credit_limit) : 0,
       });
 
-      setSuccess("Retailer added successfully.");
+      setSuccess("Existing retailer account connected successfully.");
 
       window.setTimeout(() => {
         navigate("/wholesaler/retailers", { replace: true });
@@ -93,10 +93,10 @@ export default function AddRetailer() {
 
         <div>
           <span>Retailer network</span>
-          <h1>Add retailer manually</h1>
+          <h1>Connect retailer account</h1>
           <p>
-            Create a retailer profile and connect it to your
-            wholesale business.
+            Find an existing retailer by its registered email or phone.
+            Account details remain controlled by the retailer.
           </p>
         </div>
       </header>
@@ -107,7 +107,7 @@ export default function AddRetailer() {
             <div><Store size={20} /></div>
             <span>
               <strong>Business details</strong>
-              <small>Add the retailer shop and primary contact.</small>
+              <small>Enter the retailer's registered account details.</small>
             </span>
           </div>
 
@@ -303,7 +303,7 @@ export default function AddRetailer() {
             ) : (
               <>
                 <Save size={18} />
-                Add retailer
+                Connect retailer
               </>
             )}
           </button>

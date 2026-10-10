@@ -11,7 +11,8 @@ const { pool } = await import('../src/db.js');
 const { config } = await import('../src/config.js');
 const suffix = crypto.randomBytes(8).toString('hex');
 const users = [];
-let orderId, invoiceId, catalogId, productId, catalogOrderId, catalogInvoiceId, server;
+let orderId, invoiceId, catalogId, productId, catalogOrderId, catalogInvoiceId;
+let linkedCatalogOrderId, linkedCatalogInvoiceId, deliveryId, server;
 try {
   for (const role of ['retailer', 'retailer', 'wholesaler', 'wholesaler']) {
     const [result] = await connection.query(`INSERT INTO users
@@ -117,7 +118,7 @@ try {
 
   const [catalog] = await connection.query(`INSERT INTO wholesale_catalogs (wholesaler_id,slug,title,is_published) VALUES (?,?,?,1)`, [users[2], `test-${suffix}`, 'Synthetic catalog']);
   catalogId = catalog.insertId;
-  const [product] = await connection.query(`INSERT INTO wholesale_products (wholesaler_id,name,category_name,unit,price_mode,price) VALUES (?,'Synthetic product','Test','unit','fixed',50)`, [users[2]]);
+  const [product] = await connection.query(`INSERT INTO wholesale_products (wholesaler_id,name,category_name,unit,price_mode,price,stock_quantity) VALUES (?,'Synthetic product','Test','unit','fixed',50,100)`, [users[2]]);
   productId = product.insertId;
   const [catalogOrder] = await connection.query(`INSERT INTO wholesale_catalog_orders (order_no,catalog_id,wholesaler_id,customer_name,business_name,phone,email,delivery_address,total_amount) VALUES (?,?,?,?,?,'000',?,'Synthetic address',100)`, [`CAT-${suffix}`, catalogId, users[2], 'Guest buyer', 'Guest business', `guest-${suffix}@example.invalid`]);
   catalogOrderId = catalogOrder.insertId;
@@ -142,6 +143,69 @@ try {
   const [[catalogBalance]] = await connection.query('SELECT paid_amount,status FROM invoices WHERE id=?', [catalogInvoiceId]);
   assert.equal(Number(catalogBalance.paid_amount), 40);
   assert.equal(catalogBalance.status, 'partial');
+
+  const linkedOrder = await request(`/public/catalog/test-${suffix}/orders`, users[0], {
+    method: 'POST', body: JSON.stringify({
+      customer_name: 'Registered buyer', business_name: 'Registered business', phone: '000',
+      email: `invoice-test-${suffix}-0@example.invalid`, delivery_address: 'Linked address',
+      items: [{ product_id: productId, quantity: 2 }],
+    }),
+  });
+  assert.equal(linkedOrder.status, 201);
+  linkedCatalogOrderId = (await linkedOrder.json()).id;
+  const linkedConfirmed = await request(`/wholesaler/orders/${linkedCatalogOrderId}/confirm`, users[2], {
+    method: 'POST', body: JSON.stringify({ payment_type: 'due' }),
+  });
+  assert.equal(linkedConfirmed.status, 201);
+  linkedCatalogInvoiceId = (await linkedConfirmed.json()).invoice_id;
+  const linkedList = await (await request('/retailer/invoices', users[0])).json();
+  assert.ok(linkedList.some(row => Number(row.id) === linkedCatalogInvoiceId && row.source_type === 'catalog_order'));
+  const linkedDetail = await request(`/retailer/invoices/${linkedCatalogInvoiceId}`, users[0]);
+  assert.equal(linkedDetail.status, 200);
+  assert.equal((await linkedDetail.json()).items.length, 1);
+  assert.equal((await request(`/retailer/invoices/${linkedCatalogInvoiceId}`, users[1])).status, 404);
+  assert.equal((await request(`/retailer/invoices/${linkedCatalogInvoiceId}/payments`, users[0], {
+    method: 'POST', body: JSON.stringify({ amount: 25, method: 'cash' }),
+  })).status, 201);
+
+  assert.equal((await request(`/wholesaler/catalog/orders/${linkedCatalogOrderId}/delivery`, users[3], {
+    method: 'POST', body: JSON.stringify({ delivery_type: 'merchant_delivery' }),
+  })).status, 404);
+  const createdDelivery = await request(`/wholesaler/catalog/orders/${linkedCatalogOrderId}/delivery`, users[2], {
+    method: 'POST', body: JSON.stringify({ delivery_type: 'merchant_delivery', delivery_notes: 'Synthetic delivery' }),
+  });
+  assert.equal(createdDelivery.status, 201);
+  deliveryId = (await createdDelivery.json()).delivery_id;
+  const deliveryList = await (await request('/wholesaler/deliveries', users[2])).json();
+  assert.ok(deliveryList.deliveries.some(row => Number(row.id) === deliveryId));
+  const deliveryDetail = await request(`/wholesaler/deliveries/${deliveryId}`, users[2]);
+  assert.equal(deliveryDetail.status, 200);
+  assert.equal((await deliveryDetail.json()).items.length, 1);
+  assert.equal((await request(`/wholesaler/deliveries/${deliveryId}`, users[3])).status, 404);
+  assert.equal((await request(`/wholesaler/deliveries/${deliveryId}`, users[0])).status, 403);
+  assert.equal((await request(`/wholesaler/deliveries/${deliveryId}`)).status, 401);
+  assert.equal((await request(`/wholesaler/deliveries/${deliveryId}`, users[2], {
+    method: 'PATCH', body: JSON.stringify({ status: 'packed' }),
+  })).status, 422);
+  for (const status of ['dispatched', 'out_for_delivery', 'delivered']) {
+    const updated = await request(`/wholesaler/deliveries/${deliveryId}`, users[2], {
+      method: 'PATCH', body: JSON.stringify({
+        status, driver_name: 'Test Driver', driver_phone: '000', vehicle_number: 'TEST-1',
+        delivery_notes: 'Synthetic delivery',
+      }),
+    });
+    assert.equal(updated.status, 200, `delivery transition to ${status}`);
+  }
+  const [[completedDelivery]] = await connection.query(
+    `SELECT d.status,d.dispatched_at,d.out_for_delivery_at,d.delivered_at,o.status order_status
+     FROM wholesale_catalog_deliveries d JOIN wholesale_catalog_orders o ON o.id=d.order_id
+     WHERE d.id=?`, [deliveryId]);
+  assert.equal(completedDelivery.status, 'delivered');
+  assert.equal(completedDelivery.order_status, 'delivered');
+  assert.ok(completedDelivery.dispatched_at && completedDelivery.out_for_delivery_at && completedDelivery.delivered_at);
+  assert.equal((await request(`/wholesaler/catalog/orders/${linkedCatalogOrderId}/delivery`, users[2], {
+    method: 'POST', body: JSON.stringify({ delivery_type: 'merchant_delivery' }),
+  })).status, 409);
   // Website list and discovery must follow approval changes immediately.
   for (const verification of ['draft', 'pending', 'rejected', 'verified']) {
     await connection.query('UPDATE users SET verification_status=? WHERE id=?', [verification, users[3]]);
@@ -170,6 +234,12 @@ try {
       await connection.query('DELETE FROM payments WHERE invoice_id=?', [catalogInvoiceId]);
       await connection.query('DELETE FROM invoices WHERE id=?', [catalogInvoiceId]);
     }
+    if (deliveryId) await connection.query('DELETE FROM wholesale_catalog_deliveries WHERE id=?', [deliveryId]);
+    if (linkedCatalogInvoiceId) {
+      await connection.query('DELETE FROM payments WHERE invoice_id=?', [linkedCatalogInvoiceId]);
+      await connection.query('DELETE FROM invoices WHERE id=?', [linkedCatalogInvoiceId]);
+    }
+    if (linkedCatalogOrderId) await connection.query('DELETE FROM wholesale_catalog_orders WHERE id=?', [linkedCatalogOrderId]);
     if (catalogOrderId) await connection.query('DELETE FROM wholesale_catalog_orders WHERE id=?', [catalogOrderId]);
     if (productId) await connection.query('DELETE FROM wholesale_products WHERE id=?', [productId]);
     if (catalogId) await connection.query('DELETE FROM wholesale_catalogs WHERE id=?', [catalogId]);

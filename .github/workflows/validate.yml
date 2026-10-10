@@ -23,7 +23,24 @@ jobs:
             tofado-mobile/package-lock.json
       - run: npm ci
       - run: npm run install:all
+      - name: Verify release tooling
+        shell: bash
+        run: |
+          test -f ops/release/package.sh
+          test -f ops/release/remote-deploy.sh
+          test -f ops/release/rollback.sh
+          test -f ops/release/smoke-test.mjs
+          bash -n ops/release/package.sh
+          bash -n ops/release/remote-deploy.sh
+          bash -n ops/release/rollback.sh
+          node --check ops/release/smoke-test.mjs
       - run: npm test
+      - name: Install browser for merchant E2E tests
+        run: npx playwright install --with-deps chromium
+        working-directory: merchant-client
+      - name: Run merchant business journey E2E tests
+        run: npm run test:e2e
+        working-directory: merchant-client
       - run: npm run security:secrets
       - run: npm run build
       - name: Check mobile JavaScript bundle

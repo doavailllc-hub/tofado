@@ -9,7 +9,7 @@ import StatusBadge from "../../components/StatusBadge";
 import { date, money, title } from "../../utils/format";
 
 export default function RetailerOrderDetailsScreen({ route, navigation }) {
-  const { id } = route.params;
+  const { id, sourceType = "purchase_order" } = route.params;
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -19,14 +19,15 @@ export default function RetailerOrderDetailsScreen({ route, navigation }) {
     try {
       refresh ? setRefreshing(true) : setLoading(true);
       setError("");
-      const { data } = await api.get(`/retailer/orders/${id}`);
+      const endpoint = sourceType === "catalog_order" ? `/retailer/catalog/orders/${id}` : `/retailer/orders/${id}`;
+      const { data } = await api.get(endpoint);
       setData(data);
     } catch (e) {
       setError(e?.response?.data?.message || "Unable to load order.");
     } finally {
       setLoading(false); setRefreshing(false);
     }
-  }, [id]);
+  }, [id, sourceType]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -40,7 +41,7 @@ export default function RetailerOrderDetailsScreen({ route, navigation }) {
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <ScrollView contentContainerStyle={styles.page} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}>
-        <MobileHeader eyebrow="Purchase order" title={order.order_no || `Order #${id}`} subtitle={order.wholesaler_name || "Wholesaler"} onBack={() => navigation.goBack()} />
+        <MobileHeader eyebrow={sourceType === "catalog_order" ? "Catalog order" : "Purchase order"} title={order.order_no || `Order #${id}`} subtitle={order.wholesaler_name || "Wholesaler"} onBack={() => navigation.goBack()} />
         {!!error && <View style={styles.error}><Ionicons name="cloud-offline-outline" size={18} color="#C5221F" /><Text style={styles.errorText}>{error}</Text></View>}
         <View style={styles.hero}>
           <View style={styles.heroCopy}><Text style={styles.kicker}>ORDER TOTAL</Text><Text style={styles.total}>{money(order.total_amount)}</Text><Text style={styles.heroCaption}>Purchase order summary</Text></View>
@@ -61,7 +62,7 @@ export default function RetailerOrderDetailsScreen({ route, navigation }) {
             <View style={[styles.item, index === items.length - 1 && styles.itemLast]} key={item.id || index}>
               <View style={styles.itemIcon}><Ionicons name="cube-outline" size={18} color="#5F6368" /></View>
               <View style={styles.itemCopy}><Text style={styles.itemName}>{item.product_name}</Text><Text style={styles.itemMeta}>{item.quantity} {item.unit || ""}</Text></View>
-              <Text style={styles.itemPrice}>{item.unit_price == null ? "Awaiting price" : money(item.line_total)}</Text>
+              <Text style={styles.itemPrice}>{Number(item.unit_price || 0) <= 0 ? "Awaiting quote" : `${money(item.unit_price)} · ${money(item.line_total)}`}</Text>
             </View>
           )) : <View style={styles.emptyItems}><Text style={styles.emptyItemsText}>No products have been added.</Text></View>}
         </View>

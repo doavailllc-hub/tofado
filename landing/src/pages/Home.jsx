@@ -279,14 +279,6 @@ export default function Home() {
     <div className="fk-home">
       <section className="fk-top-search">
         <div className="fk-top-search-shell">
-          <div className="fk-market-brand">
-            <Store size={23} />
-            <div>
-              <strong>Tofado Marketplace</strong>
-              <span>Wholesale made simple</span>
-            </div>
-          </div>
-
           <form onSubmit={searchMarketplace} className="fk-search-bar">
             <Search size={20} />
             <input
@@ -294,6 +286,7 @@ export default function Home() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search for wholesalers, products, brands and more"
+              aria-label="Search wholesalers, products and brands"
             />
 
             <div className="fk-location-input">
@@ -303,11 +296,12 @@ export default function Home() {
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
                 placeholder="Location"
+                aria-label="Filter by location"
               />
             </div>
 
-            <button type="submit">
-              Search
+            <button type="submit" disabled={searching}>
+              {searching ? "Searching..." : "Search"}
             </button>
           </form>
         </div>
@@ -320,6 +314,7 @@ export default function Home() {
               type="button"
               key={item}
               onClick={() => searchMarketplace(null, item)}
+              aria-label={`Browse ${item}`}
             >
               <div>{categoryIcons[index % categoryIcons.length]}</div>
               <span>{item}</span>

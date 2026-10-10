@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ActivityIndicator, AppState, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import api from "../../services/api";
 import { colors } from "../../theme/colors";
 import MobileHeader from "../../components/MobileHeader";
 import KeyboardAwareScrollView from "../../components/KeyboardAwareScrollView";
+import { useAuth } from "../../context/AuthContext";
+import { clearOrderDraft, loadOrderDraft, saveOrderDraft } from "../../services/orderDrafts";
 
 const newItem = () => ({ key: `${Date.now()}-${Math.random()}`, product_name: "", quantity: "1", unit: "piece", notes: "" });
 const STEPS = [
@@ -16,6 +18,7 @@ const STEPS = [
 ];
 
 export default function CreateOrderScreen({ navigation, route }) {
+  const { user } = useAuth();
   const [vendors, setVendors] = useState([]);
   const [wholesalerId, setWholesalerId] = useState(route.params?.wholesalerId || null);
   const [address, setAddress] = useState("");
@@ -26,6 +29,11 @@ export default function CreateOrderScreen({ navigation, route }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [step, setStep] = useState(0);
+  const [draftReady, setDraftReady] = useState(false);
+  const [draftStatus, setDraftStatus] = useState("");
+  const latestDraft = useRef(null);
+  const submitted = useRef(false);
+  const skipInitialDraftWrite = useRef(true);
 
   const load = useCallback(async () => {
     try {
@@ -43,10 +51,62 @@ export default function CreateOrderScreen({ navigation, route }) {
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const draft = await loadOrderDraft(user?.id);
+        if (!active || !draft) return;
+        setWholesalerId(route.params?.wholesalerId || draft.wholesalerId);
+        setAddress(draft.address);
+        setRequiredDate(draft.requiredDate);
+        setNotes(draft.notes);
+        setItems(draft.items.length ? draft.items : [newItem()]);
+        setStep(draft.step);
+        setDraftStatus("Draft restored from this device");
+      } catch {
+        if (active) setDraftStatus("Draft recovery is temporarily unavailable");
+      } finally {
+        if (active) setDraftReady(true);
+      }
+    })();
+    return () => { active = false; };
+  }, [route.params?.wholesalerId, user?.id]);
+
+  useEffect(() => {
     if (route.params?.wholesalerId) {
       setWholesalerId(route.params.wholesalerId);
     }
   }, [route.params?.wholesalerId]);
+
+  useEffect(() => {
+    if (!draftReady || !user?.id) return;
+    const draft = { wholesalerId, address, requiredDate, notes, items, step };
+    latestDraft.current = draft;
+    if (skipInitialDraftWrite.current) {
+      skipInitialDraftWrite.current = false;
+      return;
+    }
+    setDraftStatus("Saving draft…");
+    const timer = setTimeout(async () => {
+      try {
+        const saved = await saveOrderDraft(user.id, draft);
+        if (!submitted.current) setDraftStatus(saved ? "Draft saved on this device" : "");
+      } catch {
+        if (!submitted.current) setDraftStatus("Draft couldn't be saved");
+      }
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [address, draftReady, items, notes, requiredDate, step, user?.id, wholesalerId]);
+
+  useEffect(() => {
+    const persist = () => {
+      if (!submitted.current && latestDraft.current && user?.id) {
+        saveOrderDraft(user.id, latestDraft.current).catch(() => {});
+      }
+    };
+    const subscription = AppState.addEventListener("change", (state) => { if (state !== "active") persist(); });
+    return () => { subscription.remove(); persist(); };
+  }, [user?.id]);
 
   const updateItem = (key, field, value) =>
     setItems((current) => current.map((x) => x.key === key ? { ...x, [field]: value } : x));
@@ -80,7 +140,8 @@ export default function CreateOrderScreen({ navigation, route }) {
         notes: notes.trim() || null,
         items: clean,
       });
-
+      submitted.current = true;
+      await clearOrderDraft(user?.id);
       navigation.replace("RetailerOrderDetails", { id: data.id });
     } catch (e) {
       setError(e?.response?.data?.message || "Unable to create order.");
@@ -89,13 +150,23 @@ export default function CreateOrderScreen({ navigation, route }) {
     }
   };
 
-  if (loading) return <SafeAreaView style={styles.safe}><View style={styles.loading}><ActivityIndicator color={colors.primary} /></View></SafeAreaView>;
+  const discardDraft = async () => {
+    submitted.current = true;
+    await clearOrderDraft(user?.id);
+    latestDraft.current = null;
+    setWholesalerId(route.params?.wholesalerId || vendors[0]?.id || null);
+    setAddress(""); setRequiredDate(""); setNotes(""); setItems([newItem()]); setStep(0); setError(""); setDraftStatus("");
+    submitted.current = false;
+  };
+
+  if (loading || !draftReady) return <SafeAreaView style={styles.safe}><View style={styles.loading}><ActivityIndicator color={colors.primary} /></View></SafeAreaView>;
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <KeyboardAwareScrollView contentContainerStyle={styles.page}>
         <MobileHeader eyebrow={`Purchase order · Step ${step + 1} of ${STEPS.length}`} title={STEPS[step].title} subtitle={STEPS[step].subtitle} onBack={() => step ? setStep((current) => current - 1) : navigation.goBack()} />
         <View style={styles.progressTrack}><View style={[styles.progress, { width:`${((step + 1) / STEPS.length) * 100}%` }]} /></View>
+        {!!draftStatus && <View style={[styles.draftBanner, draftStatus.includes("couldn't") && styles.draftBannerError]}><View style={styles.draftCopy}><Ionicons name={draftStatus.includes("restored") ? "refresh-circle-outline" : "cloud-done-outline"} size={18} color={draftStatus.includes("couldn't") ? colors.red : colors.primary} /><Text style={[styles.draftText, draftStatus.includes("couldn't") && styles.draftTextError]}>{draftStatus}</Text></View><Pressable accessibilityRole="button" accessibilityLabel="Discard saved order draft" onPress={discardDraft}><Text style={styles.discardText}>Discard</Text></Pressable></View>}
         {!!error && <Text style={styles.error}>{error}</Text>}
 
         {step === 0 ? <><Text style={styles.label}>Wholesaler</Text>
@@ -158,6 +229,12 @@ const styles = StyleSheet.create({
   progress: { height: "100%", borderRadius: 3, backgroundColor: colors.primary },
   loading: { flex: 1, alignItems: "center", justifyContent: "center" },
   error: { marginBottom: 12, padding: 11, borderRadius: 11, color: colors.red, backgroundColor: colors.redSoft, fontSize: 10 },
+  draftBanner: { minHeight: 42, marginBottom: 12, paddingHorizontal: 12, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, borderWidth: 1, borderColor: "#BFDBFE", borderRadius: 11, backgroundColor: colors.primarySoft },
+  draftBannerError: { borderColor: "#FECACA", backgroundColor: colors.redSoft },
+  draftCopy: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 7 },
+  draftText: { flex: 1, color: colors.primaryDark, fontSize: 9, fontWeight: "800" },
+  draftTextError: { color: colors.red },
+  discardText: { color: colors.body, fontSize: 9, fontWeight: "900", textDecorationLine: "underline" },
   label: { marginTop: 15, marginBottom: 7, color: colors.ink, fontSize: 10, fontWeight: "800" },
   vendorList: { gap: 8 },
   vendor: { minHeight: 48, flexDirection: "row", alignItems: "center", gap: 9, paddingHorizontal: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 12 },

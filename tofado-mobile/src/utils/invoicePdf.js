@@ -1,13 +1,16 @@
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { money, date, title } from "./format";
+import { buildInvoiceHtml as buildTemplatedInvoiceHtml } from "./invoiceTemplates";
+export { INVOICE_TEMPLATES, normalizeInvoiceTemplate } from "./invoiceTemplates";
+export const buildInvoiceHtml = buildTemplatedInvoiceHtml;
 
 const escapeHtml = (value) => String(value ?? "—")
   .replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
 
 const lineTotal = (item) => Number(item.line_total ?? (Number(item.quantity || 0) * Number(item.unit_price || 0)));
 
-export function buildInvoiceHtml({ invoice = {}, merchant = {}, retailer = {}, items = [], payments = [] }) {
+function legacyBuildInvoiceHtml({ invoice = {}, merchant = {}, retailer = {}, items = [], payments = [] }) {
   const subtotal = Number(invoice.subtotal || items.reduce((sum, item) => sum + lineTotal(item), 0));
   const tax = Number(invoice.tax_amount || 0);
   const total = Number(invoice.total_amount || subtotal + tax);
@@ -27,10 +30,10 @@ export function buildInvoiceHtml({ invoice = {}, merchant = {}, retailer = {}, i
 
 let activeExport = null;
 
-export async function exportInvoicePdf(payload, mode = "share") {
+export async function exportInvoicePdf(payload, mode = "share", templateId = "modern") {
   if (activeExport) return activeExport;
   activeExport = (async () => {
-    const { uri } = await Print.printToFileAsync({ html: buildInvoiceHtml(payload), base64: false });
+    const { uri } = await Print.printToFileAsync({ html: buildTemplatedInvoiceHtml(payload, templateId), base64: false });
 
     if (mode === "download") {
       await Print.printAsync({ uri });

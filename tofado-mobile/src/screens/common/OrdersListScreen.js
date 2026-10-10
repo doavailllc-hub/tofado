@@ -18,8 +18,15 @@ export default function OrdersListScreen({ role, navigation }) {
   const load = useCallback(async (refresh = false) => {
     try {
       refresh ? setRefreshing(true) : setLoading(true); setError("");
-      const { data } = await api.get(`/${role}/orders`);
-      setRows(Array.isArray(data) ? data : data?.orders || []);
+      const [purchaseResponse, catalogResponse] = await Promise.all([
+        api.get(`/${role}/orders`),
+        api.get(`/${role}/catalog/orders`),
+      ]);
+      const purchases = (Array.isArray(purchaseResponse.data) ? purchaseResponse.data : purchaseResponse.data?.orders || [])
+        .map((row) => ({ ...row, source_type:"purchase_order" }));
+      const catalog = (Array.isArray(catalogResponse.data) ? catalogResponse.data : catalogResponse.data?.orders || [])
+        .map((row) => ({ ...row, source_type:"catalog_order", retailer_name:row.retailer_name || row.business_name || row.customer_name }));
+      setRows([...purchases, ...catalog].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)));
     } catch (e) { setError(friendlyError(e, "Unable to load orders.")); }
     finally { setLoading(false); setRefreshing(false); }
   }, [role]);
@@ -53,9 +60,9 @@ export default function OrdersListScreen({ role, navigation }) {
   </View>;
 
   return <SafeAreaView style={styles.safe} edges={["top"]}>{loading ? <View style={styles.loading}><ActivityIndicator color="#1A73E8" /><Text style={styles.loadingText}>Loading orders…</Text></View> :
-    <FlatList data={visible} keyExtractor={(item, index) => String(item.id || index)} ListHeaderComponent={header} ItemSeparatorComponent={() => <View style={styles.gap} />} contentContainerStyle={styles.page} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={colors.primary} />}
-      renderItem={({ item }) => <Pressable onPress={() => navigation.navigate(retailer ? "RetailerOrderDetails" : "WholesalerOrderDetails", { id: item.id })} style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}>
-        <View style={styles.cardTop}><View style={styles.orderIcon}><Ionicons name="bag-handle-outline" size={20} color={colors.primaryDark} /></View><View style={styles.orderCopy}><Text numberOfLines={1} style={styles.orderNo}>{item.order_no || `Order #${item.id}`}</Text><Text numberOfLines={1} style={styles.partner}>{(retailer ? item.wholesaler_name : item.retailer_name) || "Business partner"}</Text></View><StatusBadge status={item.status} /></View>
+    <FlatList data={visible} keyExtractor={(item, index) => `${item.source_type || "order"}-${item.id || index}`} ListHeaderComponent={header} ItemSeparatorComponent={() => <View style={styles.gap} />} contentContainerStyle={styles.page} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={colors.primary} />}
+      renderItem={({ item }) => <Pressable onPress={() => navigation.navigate(retailer ? "RetailerOrderDetails" : "WholesalerOrderDetails", { id: item.id, sourceType:item.source_type })} style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}>
+        <View style={styles.cardTop}><View style={styles.orderIcon}><Ionicons name={item.source_type === "catalog_order" ? "storefront-outline" : "bag-handle-outline"} size={20} color={colors.primaryDark} /></View><View style={styles.orderCopy}><Text numberOfLines={1} style={styles.orderNo}>{item.order_no || `Order #${item.id}`}</Text><Text numberOfLines={1} style={styles.partner}>{(retailer ? item.wholesaler_name : item.retailer_name) || "Business partner"} · {item.source_type === "catalog_order" ? "Catalog" : "Purchase order"}</Text></View><StatusBadge status={item.status} /></View>
         <View style={styles.divider} /><View style={styles.cardBottom}><View style={styles.meta}><Ionicons name="calendar-clear-outline" size={14} color={colors.muted} /><Text style={styles.metaText}>{retailer ? "Created" : "Required"} {date(retailer ? item.created_at : item.required_date || item.created_at)}</Text></View><View style={styles.amountRow}><Text style={styles.amount}>{money(item.total_amount)}</Text><Ionicons name="chevron-forward" size={16} color={colors.muted} /></View></View>
       </Pressable>}
       ListEmptyComponent={<View style={styles.empty}><View style={styles.emptyIcon}><Ionicons name="bag-handle-outline" size={27} color={colors.primary} /></View><Text style={styles.emptyTitle}>{query || filter !== "all" ? "No matching orders" : "No orders yet"}</Text><Text style={styles.emptyCopy}>{query || filter !== "all" ? "Try another search or status filter." : retailer ? "Create your first purchase order to get started." : "New retailer orders will appear here."}</Text>{retailer && !query && filter === "all" ? <Pressable onPress={() => navigation.navigate("CreateOrder")} style={styles.emptyButton}><Text style={styles.emptyButtonText}>Create order</Text></Pressable> : null}</View>} />}

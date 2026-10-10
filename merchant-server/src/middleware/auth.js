@@ -18,6 +18,10 @@ export async function auth(req, res, next) {
     next();
   } catch (error) { next(error); }
 }
+export async function optionalAuth(req, res, next) {
+  if (!req.headers.authorization) return next();
+  return auth(req, res, next);
+}
 export const allow = (...roles) => (req, res, next) => {
   if (!roles.includes(req.user?.role)) return res.status(403).json({ message: 'Access denied' });
   if (req.user.role === 'wholesaler' && req.user.verification_status !== 'verified') {

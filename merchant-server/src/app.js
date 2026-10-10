@@ -21,13 +21,22 @@ import { authColumns, registrationColumns, requireColumns } from './schema.js';
 import { rateLimit } from 'express-rate-limit';
 import { asyncHandler, requestContext, errorHandler, logFailure } from './middleware/http.js';
 import { pool } from "./db.js";
-import { auth, allow, allowOnboarding } from "./middleware/auth.js";
+import { auth, optionalAuth, allow, allowOnboarding } from "./middleware/auth.js";
 import {
   hashPassword,
   verifyPassword,
 } from "./utils/password.js";
 export const app = express();
 let releaseId = process.env.RELEASE_ID || 'development';
+const DELIVERY_TRANSITIONS = {
+  pending: new Set(['packed', 'cancelled']),
+  packed: new Set(['ready', 'cancelled']),
+  ready: new Set(['dispatched', 'cancelled']),
+  dispatched: new Set(['out_for_delivery', 'cancelled']),
+  out_for_delivery: new Set(['delivered', 'cancelled']),
+  delivered: new Set(),
+  cancelled: new Set(),
+};
 try {
   releaseId = JSON.parse(fs.readFileSync(new URL('../release.json', import.meta.url), 'utf8')).release_id || releaseId;
 } catch {}
@@ -1062,7 +1071,40 @@ app.post('/api/retailer/orders', auth, allow('retailer'), asyncHandler(async (re
   finally { connection.release(); }
 }));
 app.get('/api/retailer/orders', auth, allow('retailer'), asyncHandler(async (req, res) => res.json(await q(`SELECT o.id,o.order_no,w.business_name wholesaler_name,o.created_at,o.status,o.total_amount FROM purchase_orders o JOIN users w ON w.id=o.wholesaler_id WHERE o.retailer_id=? ORDER BY o.id DESC`, [req.user.id]))));
-app.get('/api/retailer/invoices', auth, allow('retailer'), asyncHandler(async (req, res) => res.json(await q(`SELECT i.id,i.invoice_no,w.business_name wholesaler_name,o.order_no,i.total_amount,i.paid_amount,i.due_date,i.status FROM invoices i JOIN purchase_orders o ON o.id=i.order_id JOIN users w ON w.id=i.wholesaler_id WHERE i.retailer_id=? ORDER BY i.id DESC`, [req.user.id]))));
+app.get('/api/retailer/catalog/orders', auth, allow('retailer'), asyncHandler(async (req, res) => res.json(await q(`
+  SELECT o.id,o.order_no,w.business_name wholesaler_name,o.created_at,o.required_date,o.status,o.total_amount,
+         COUNT(oi.id) items_count
+  FROM wholesale_catalog_orders o
+  JOIN users w ON w.id=o.wholesaler_id
+  LEFT JOIN wholesale_catalog_order_items oi ON oi.order_id=o.id
+  WHERE o.retailer_id=?
+  GROUP BY o.id,o.order_no,w.business_name,o.created_at,o.required_date,o.status,o.total_amount
+  ORDER BY o.id DESC`, [req.user.id]))));
+app.get('/api/retailer/catalog/orders/:id', auth, allow('retailer'), asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isSafeInteger(id) || id <= 0) return res.status(400).json({ message: 'Invalid order ID.' });
+  const [order] = await q(`SELECT o.*,w.business_name wholesaler_name,i.id invoice_id,i.invoice_no,
+      i.status payment_status,i.lifecycle_status invoice_status,i.due_date payment_due_date,
+      d.id delivery_id,d.status delivery_status,d.driver_name,d.driver_phone,d.vehicle_number
+    FROM wholesale_catalog_orders o
+    JOIN users w ON w.id=o.wholesaler_id
+    LEFT JOIN invoices i ON i.catalog_order_id=o.id AND i.source_type='catalog_order'
+    LEFT JOIN wholesale_catalog_deliveries d ON d.order_id=o.id
+    WHERE o.id=? AND o.retailer_id=? LIMIT 1`, [id, req.user.id]);
+  if (!order) return res.status(404).json({ message: 'Catalog order not found.' });
+  const items = await q(`SELECT oi.id,oi.product_id,oi.product_name,oi.sku,oi.unit,oi.price AS unit_price,
+      oi.quantity,oi.line_total,p.price_mode,p.image_url
+    FROM wholesale_catalog_order_items oi
+    LEFT JOIN wholesale_products p ON p.id=oi.product_id
+    WHERE oi.order_id=? ORDER BY oi.id ASC`, [id]);
+  res.json({
+    order,
+    items,
+    invoice: order.invoice_id ? { id:order.invoice_id, invoice_no:order.invoice_no, status:order.invoice_status, payment_status:order.payment_status, due_date:order.payment_due_date } : null,
+    delivery: order.delivery_id ? { id:order.delivery_id, status:order.delivery_status, driver_name:order.driver_name, driver_phone:order.driver_phone, vehicle_number:order.vehicle_number } : null,
+  });
+}));
+app.get('/api/retailer/invoices', auth, allow('retailer'), asyncHandler(async (req, res) => res.json(await q(`SELECT i.id,i.invoice_no,w.business_name wholesaler_name,COALESCE(o.order_no,co.order_no) order_no,i.source_type,i.total_amount,i.paid_amount,i.due_date,i.status FROM invoices i LEFT JOIN purchase_orders o ON o.id=i.order_id LEFT JOIN wholesale_catalog_orders co ON co.id=i.catalog_order_id JOIN users w ON w.id=i.wholesaler_id WHERE i.retailer_id=? ORDER BY i.id DESC`, [req.user.id]))));
 app.get('/api/retailer/dashboard', auth, allow('retailer'), asyncHandler(async (req, res) => { const [s] = await q(`SELECT COUNT(*) total_orders,SUM(status='pending') pending_orders,COALESCE(SUM(total_amount),0) purchase_value FROM purchase_orders WHERE retailer_id=?`, [req.user.id]); const [inv] = await q(`SELECT COALESCE(SUM(total_amount-paid_amount),0) outstanding FROM invoices WHERE retailer_id=?`, [req.user.id]); const recent = await q(`SELECT o.id,o.order_no,w.business_name,o.created_at,o.status,o.total_amount FROM purchase_orders o JOIN users w ON w.id=o.wholesaler_id WHERE o.retailer_id=? ORDER BY o.id DESC LIMIT 8`, [req.user.id]); res.json({ stats: { total_orders: s.total_orders, pending_orders: s.pending_orders, purchase_value: `INR ${Number(s.purchase_value).toFixed(2)}`, outstanding: `INR ${Number(inv.outstanding).toFixed(2)}` }, recent }) }));
 app.get('/api/wholesaler/orders', auth, allow('wholesaler'), asyncHandler(async (req, res) => res.json(await q(`SELECT o.id,o.order_no,r.business_name retailer_name,o.created_at,o.required_date,o.status,o.total_amount FROM purchase_orders o JOIN users r ON r.id=o.retailer_id WHERE o.wholesaler_id=? ORDER BY o.id DESC`, [req.user.id]))));
 app.get('/api/wholesaler/orders/:id', auth, allow('wholesaler'), asyncHandler(async (req, res) => {
@@ -2099,7 +2141,6 @@ compare_price,
         FROM wholesale_products
         WHERE id = ?
           AND wholesaler_id = ?
-        LIMIT 1
         `,
         [productId, wholesalerId]
       );
@@ -2345,10 +2386,17 @@ app.get(
 
 app.post(
   "/api/public/catalog/:slug/orders",
+  optionalAuth,
   asyncHandler(async (req, res, next) => {
     const connection = await pool.getConnection();
 
     try {
+      if (req.user && req.user.role !== "retailer") {
+        return res.status(403).json({
+          message: "Only retailer accounts can place linked storefront orders.",
+        });
+      }
+
       const {
         customer_name,
         business_name = "",
@@ -2520,6 +2568,7 @@ app.post(
           order_no,
           catalog_id,
           wholesaler_id,
+          retailer_id,
           customer_name,
           business_name,
           phone,
@@ -2530,11 +2579,12 @@ app.post(
           status,
           total_amount
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
         [
           orderNo,
           catalog.id,
           catalog.wholesaler_id,
+          req.user?.id || null,
           String(customer_name).trim(),
           String(business_name).trim() || null,
           String(phone).trim(),
@@ -2733,6 +2783,7 @@ app.get(
            oi.quantity,
            oi.line_total,
            oi.created_at,
+           p.price_mode,
            p.image_url
          FROM wholesale_catalog_order_items oi
          LEFT JOIN wholesale_products p
@@ -2917,12 +2968,12 @@ app.post(
         });
       }
 
-      if (order.status === "pending") {
+      if (!["confirmed", "packed"].includes(order.status)) {
         await connection.rollback();
 
         return res.status(409).json({
           message:
-            "Confirm the order before creating delivery.",
+            "Only confirmed orders can create or update a delivery.",
         });
       }
 
@@ -2933,9 +2984,10 @@ app.post(
           wholesaler_id,
           delivery_type,
           delivery_notes,
-          status
+          status,
+          ready_at
         )
-        VALUES (?, ?, ?, ?, 'ready')
+        VALUES (?, ?, ?, ?, 'ready', CURRENT_TIMESTAMP)
         ON DUPLICATE KEY UPDATE
           delivery_type = VALUES(delivery_type),
           delivery_notes = VALUES(delivery_notes),
@@ -3380,10 +3432,6 @@ app.post(
       connection = await pool.getConnection();
       await connection.beginTransaction();
 
-      let retailerId;
-      let temporaryPassword = null;
-      let retailerWasCreated = false;
-
       const [existingRetailers] = await connection.query(
         `
         SELECT
@@ -3407,8 +3455,6 @@ app.post(
               AND email = ?
             )
           )
-
-        LIMIT 1
         `,
         [
           cleanPhone,
@@ -3417,112 +3463,36 @@ app.post(
         ]
       );
 
+      if (existingRetailers.length > 1) {
+        await connection.rollback();
+        return res.status(409).json({
+          code: "RETAILER_IDENTITY_CONFLICT",
+          message:
+            "The email and phone belong to different retailer accounts. Use matching registered details.",
+        });
+      }
+
       const existingRetailer = existingRetailers[0];
+      if (!existingRetailer) {
+        await connection.rollback();
+        return res.status(404).json({
+          code: "RETAILER_ACCOUNT_REQUIRED",
+          message:
+            "No retailer account matches this email or phone. Ask the retailer to register, then connect the account.",
+        });
+      }
 
-      if (existingRetailer) {
-        retailerId = existingRetailer.id;
-
-        const [existingConnections] =
-          await connection.query(
-            `
-            SELECT id
-            FROM wholesaler_retailers
-            WHERE wholesaler_id = ?
-              AND retailer_id = ?
-            LIMIT 1
-            `,
-            [wholesalerId, retailerId]
-          );
-
-        if (existingConnections.length) {
-          await connection.rollback();
-
-          return res.status(409).json({
-            message:
-              "This retailer is already connected to your business.",
-          });
-        }
-
-        await connection.query(
-          `
-          UPDATE users
-          SET
-            business_name = ?,
-            name = ?,
-            email = ?,
-            phone = ?,
-            location = ?,
-            address = ?,
-            tax_number = ?,
-            status = 'active',
-            updated_at = CURRENT_TIMESTAMP
-          WHERE id = ?
-            AND role = 'retailer'
-          `,
-          [
-            cleanBusinessName,
-            cleanName,
-            cleanEmail || existingRetailer.email,
-            cleanPhone,
-            cleanLocation,
-            cleanAddress || existingRetailer.address,
-            cleanTaxNumber || existingRetailer.tax_number,
-            retailerId,
-          ]
-        );
-      } else {
-        temporaryPassword = crypto
-          .randomBytes(6)
-          .toString("hex");
-
-        const passwordHash =
-          await hashPassword(temporaryPassword);
-
-        const [userResult] = await connection.query(
-          `
-          INSERT INTO users (
-            role,
-            name,
-            business_name,
-            email,
-            phone,
-            location,
-            address,
-            tax_number,
-            password_hash,
-            status,
-            created_at,
-            updated_at
-          )
-          VALUES (
-            'retailer',
-            ?,
-            ?,
-            ?,
-            ?,
-            ?,
-            ?,
-            ?,
-            ?,
-            'active',
-            CURRENT_TIMESTAMP,
-            CURRENT_TIMESTAMP
-          )
-          `,
-          [
-            cleanName,
-            cleanBusinessName,
-            cleanEmail || null,
-            cleanPhone,
-            cleanLocation,
-            cleanAddress || null,
-            cleanTaxNumber || null,
-            passwordHash,
-          ]
-        );
-
-        retailerId = userResult.insertId;
-        retailerWasCreated = true;
+      const retailerId = existingRetailer.id;
+      const [existingConnections] = await connection.query(
+        `SELECT id FROM wholesaler_retailers
+         WHERE wholesaler_id = ? AND retailer_id = ? LIMIT 1`,
+        [wholesalerId, retailerId]
+      );
+      if (existingConnections.length) {
+        await connection.rollback();
+        return res.status(409).json({
+          message: "This retailer is already connected to your business.",
+        });
       }
 
       const [connectionResult] =
@@ -3561,9 +3531,7 @@ app.post(
       await connection.commit();
 
       return res.status(201).json({
-        message: retailerWasCreated
-          ? "Retailer created and connected successfully."
-          : "Existing retailer connected successfully.",
+        message: "Existing retailer connected successfully.",
 
         retailer: {
           id: retailerId,
@@ -3582,7 +3550,6 @@ app.post(
           status: "active",
         },
 
-        temporary_password: temporaryPassword,
       });
     } catch (error) {
       if (connection) {
@@ -3957,27 +3924,28 @@ app.get(
           d.created_at,
           d.updated_at,
 
-          po.order_no,
-          po.retailer_id,
-          po.delivery_address,
-          po.required_date,
-          po.notes AS order_notes,
-          po.total_amount,
+          o.order_no,
+          o.retailer_id,
+          o.delivery_address,
+          o.required_date,
+          o.notes AS order_notes,
+          o.total_amount,
 
-          u.business_name,
-          u.business_name AS retailer_name,
-          u.name AS contact_name,
-          u.phone AS contact_phone,
-          u.phone AS retailer_phone,
+          COALESCE(u.business_name, o.business_name, o.customer_name) AS business_name,
+          COALESCE(u.business_name, o.business_name, o.customer_name) AS retailer_name,
+          COALESCE(u.name, o.customer_name) AS contact_name,
+          COALESCE(u.phone, o.phone) AS contact_phone,
+          COALESCE(u.phone, o.phone) AS retailer_phone,
           u.location
 
         FROM wholesale_catalog_deliveries d
 
-        INNER JOIN purchase_orders po
-          ON po.id = d.order_id
+        INNER JOIN wholesale_catalog_orders o
+          ON o.id = d.order_id
+         AND o.wholesaler_id = d.wholesaler_id
 
-        INNER JOIN users u
-          ON u.id = po.retailer_id
+        LEFT JOIN users u
+          ON u.id = o.retailer_id
           AND u.role = 'retailer'
 
         WHERE d.wholesaler_id = ?
@@ -4198,6 +4166,12 @@ app.patch(
         });
       }
 
+      if (nextStatus !== delivery.status && !DELIVERY_TRANSITIONS[delivery.status]?.has(nextStatus)) {
+        return res.status(422).json({
+          message: "Invalid delivery status transition.",
+        });
+      }
+
       await q(
         `
         UPDATE wholesale_catalog_deliveries
@@ -4272,6 +4246,18 @@ app.patch(
           wholesalerId,
         ]
       );
+
+      const orderStatus = {
+        packed: 'packed',
+        ready: 'packed',
+        dispatched: 'dispatched',
+        out_for_delivery: 'dispatched',
+        delivered: 'delivered',
+      }[nextStatus];
+      if (orderStatus) {
+        await q(`UPDATE wholesale_catalog_orders SET status=?, updated_at=CURRENT_TIMESTAMP
+                 WHERE id=? AND wholesaler_id=?`, [orderStatus, delivery.order_id, wholesalerId]);
+      }
 
       const updated = await q(
         `
@@ -5447,13 +5433,14 @@ app.post(
             )
             VALUES
             (
-              ?, 'catalog_order', ?, NULL, NULL, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?,
+              ?, 'catalog_order', ?, NULL, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?,
               'unpaid', 'issued'
             )
             `,
             [
               invoiceNo,
               order.id,
+              order.retailer_id,
               order.wholesaler_id,
               order.customer_name,
               order.business_name,
@@ -5970,7 +5957,7 @@ app.get(
 // Add BEFORE your final 404 handler and app.listen()
 // Requires: auth, allow(), q(), pool
 // Tables:
-//   invoices (purchase-order invoices; catalog invoices are a separate workflow)
+//   invoices (canonical purchase-order and storefront invoices)
 //   purchase_orders
 //   purchase_order_items
 //   payments
@@ -6000,14 +5987,16 @@ app.get(
         SELECT
           i.id,
           i.invoice_no,
+          i.source_type,
           i.order_id,
+          i.catalog_order_id,
           i.wholesaler_id,
-          r.name AS customer_name,
-          r.business_name,
-          r.phone,
-          r.email,
+          COALESCE(r.name, i.customer_name) AS customer_name,
+          COALESCE(r.business_name, i.business_name) AS business_name,
+          COALESCE(r.phone, i.customer_phone) AS phone,
+          COALESCE(r.email, i.customer_email) AS email,
           i.total_amount,
-          NULL AS payment_type,
+          i.payment_type,
           i.status AS payment_status,
           i.due_date AS payment_due_date,
           NULL AS paid_at,
@@ -6015,15 +6004,15 @@ app.get(
           i.created_at,
           NULL AS updated_at,
 
-          po.order_no,
-          po.retailer_id,
-          po.delivery_address,
-          po.required_date,
-          po.notes AS order_notes,
-          po.status AS order_status,
-          po.subtotal,
-          po.tax_amount,
-          po.total_amount AS order_total_amount,
+          COALESCE(po.order_no, co.order_no) AS order_no,
+          i.retailer_id,
+          COALESCE(po.delivery_address, co.delivery_address) AS delivery_address,
+          COALESCE(po.required_date, co.required_date) AS required_date,
+          COALESCE(po.notes, co.notes) AS order_notes,
+          COALESCE(po.status, co.status) AS order_status,
+          i.subtotal,
+          i.tax_amount,
+          i.total_amount AS order_total_amount,
           po.delivered_at,
 
           w.business_name AS wholesaler_name,
@@ -6036,20 +6025,17 @@ app.get(
 
         FROM invoices i
 
-        INNER JOIN purchase_orders po
-          ON po.id = i.order_id
-         AND po.retailer_id = i.retailer_id
-         AND po.wholesaler_id = i.wholesaler_id
+        LEFT JOIN purchase_orders po ON po.id = i.order_id
+        LEFT JOIN wholesale_catalog_orders co ON co.id = i.catalog_order_id
 
-        INNER JOIN users r
-          ON r.id = i.retailer_id
+        LEFT JOIN users r ON r.id = i.retailer_id
 
         INNER JOIN users w
           ON w.id = i.wholesaler_id
          AND w.role = 'wholesaler'
 
         WHERE i.id = ?
-          AND po.retailer_id = ?
+          AND i.retailer_id = ?
 
         LIMIT 1
         `,
@@ -6064,7 +6050,14 @@ app.get(
         });
       }
 
-      const items = await q(
+      const items = invoice.source_type === "catalog_order"
+        ? await q(
+        `SELECT id, order_id, product_name, quantity, unit, price AS unit_price,
+                NULL AS notes, line_total
+         FROM wholesale_catalog_order_items
+         WHERE order_id = ? ORDER BY id ASC`,
+        [invoice.catalog_order_id]
+      ) : await q(
         `
         SELECT
           id,
@@ -6255,10 +6248,6 @@ app.post(
           i.status,
           i.retailer_id
         FROM invoices i
-        INNER JOIN purchase_orders po
-          ON po.id = i.order_id
-         AND po.retailer_id = i.retailer_id
-         AND po.wholesaler_id = i.wholesaler_id
         WHERE i.id = ?
           AND i.retailer_id = ?
         LIMIT 1

@@ -3,7 +3,7 @@
     "name": "Tofado",
     "slug": "tofado",
     "scheme": "tofado",
-    "version": "1.4.0",
+    "version": "1.4.1",
     "orientation": "portrait",
     "icon": "./assets/tofado-icon.png",
     "userInterfaceStyle": "light",
@@ -16,8 +16,12 @@
     },
     "android": {
       "package": "com.tofado.app",
-      "versionCode": 9,
+      "versionCode": 10,
       "softwareKeyboardLayoutMode": "resize",
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/tofado-icon.png",
         "backgroundColor": "#EAF6F0"

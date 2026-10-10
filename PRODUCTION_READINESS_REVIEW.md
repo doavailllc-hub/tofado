@@ -1,5 +1,19 @@
 # Tofado production readiness review
 
+## Customer account and storefront ownership - 2026-09-29
+
+- Public storefront checkout now keeps guest buyers as immutable order/invoice snapshots while linking authenticated retailer purchases through a nullable, foreign-keyed `retailer_id`.
+- A linked storefront invoice appears in the retailer invoice list/detail views and uses the same idempotent payment and wholesaler verification workflow as purchase-order invoices. Cross-retailer access remains denied.
+- Wholesalers can connect an existing retailer account by registered email or phone, but can no longer create an active account, overwrite retailer-owned profile fields, or receive a temporary password. Unknown businesses must register before being connected.
+- Migration 005 adds the storefront retailer relationship. Local staging passed guest and authenticated storefront orders, canonical invoice creation, retailer visibility/payment, tenant isolation, and zero financial-integrity findings.
+- Production still requires migration 005 before deploying this code. Interactive browser acceptance and invitation email automation remain release follow-ups.
+
+## Delivery workflow integration - 2026-09-29
+
+- Corrected the delivery list to join its actual storefront order source; it previously joined purchase orders and could omit valid deliveries.
+- Enforced forward-only delivery transitions from ready through dispatched, out for delivery and delivered, with cancellation only before a terminal state. Delivery progression now keeps the storefront order status synchronized.
+- Local staging verified creation only after order confirmation, list/detail visibility, shipment items, driver and vehicle fields, timestamps, final order status, authentication, role enforcement and cross-wholesaler isolation. Reopening or recreating a completed delivery is rejected.
+
 ## Credential exposure investigation - 2026-09-29
 
 - Confirmed `tofado-production-key.pem` is an RSA private key and the local file is byte-for-byte identical to Git blob `46ba5ebebbf7977bdd8a65bac51194a9e653cafc` on remote `origin/main`. It was introduced in commit `3c37d819bfd18d620ee81154901f62bf0041c867` and remains recoverable throughout later history. Public fingerprint: `SHA256:9jRl9mOeolVOKatRh6rck2jlQ8mlO7dgIDWhaABBZoA`.

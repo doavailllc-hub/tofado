@@ -2,6 +2,8 @@ import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const ONBOARDING_KEY = "tofado_onboarding_complete_v1";
+const INVOICE_TEMPLATE_KEY = "tofado_invoice_template_v1";
+const INVOICE_TEMPLATES = new Set(["modern", "executive", "clean"]);
 
 export async function hasCompletedOnboarding() {
   if (Platform.OS === "web") {
@@ -17,4 +19,25 @@ export async function completeOnboarding() {
     return;
   }
   await AsyncStorage.setItem(ONBOARDING_KEY, "true");
+}
+
+const invoiceTemplateKey = (userId) => `${INVOICE_TEMPLATE_KEY}:${String(userId ?? "guest")}`;
+
+export async function getInvoiceTemplate(userId) {
+  const key = invoiceTemplateKey(userId);
+  const value = Platform.OS === "web"
+    ? (typeof window !== "undefined" ? window.localStorage.getItem(key) : null)
+    : await AsyncStorage.getItem(key);
+  return INVOICE_TEMPLATES.has(value) ? value : "modern";
+}
+
+export async function setInvoiceTemplate(userId, templateId) {
+  const value = INVOICE_TEMPLATES.has(templateId) ? templateId : "modern";
+  const key = invoiceTemplateKey(userId);
+  if (Platform.OS === "web") {
+    if (typeof window !== "undefined") window.localStorage.setItem(key, value);
+    return value;
+  }
+  await AsyncStorage.setItem(key, value);
+  return value;
 }

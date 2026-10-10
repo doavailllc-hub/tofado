@@ -36,7 +36,8 @@ const checks = [
     SELECT COUNT(*) AS count
     FROM invoices i
     LEFT JOIN wholesale_catalog_orders o ON o.id=i.catalog_order_id
-    WHERE i.source_type='catalog_order' AND (o.id IS NULL OR o.wholesaler_id<>i.wholesaler_id)`],
+    WHERE i.source_type='catalog_order' AND
+      (o.id IS NULL OR o.wholesaler_id<>i.wholesaler_id OR NOT(i.retailer_id <=> o.retailer_id))`],
   ['legacy_catalog_invoice_unmigrated', `
     SELECT COUNT(*) AS count FROM wholesale_catalog_invoices legacy
     LEFT JOIN invoices i ON i.source_type='catalog_order' AND i.catalog_order_id=legacy.order_id
@@ -54,8 +55,13 @@ try {
     FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
     WHERE TABLE_SCHEMA=DATABASE()
       AND ((TABLE_NAME='invoices' AND COLUMN_NAME='order_id')
+        OR (TABLE_NAME='wholesale_catalog_orders' AND COLUMN_NAME='retailer_id')
         OR (TABLE_NAME='payments' AND COLUMN_NAME='invoice_id'))`);
-  const expected = new Set(['invoices.order_id>purchase_orders.id', 'payments.invoice_id>invoices.id']);
+  const expected = new Set([
+    'invoices.order_id>purchase_orders.id',
+    'wholesale_catalog_orders.retailer_id>users.id',
+    'payments.invoice_id>invoices.id',
+  ]);
   for (const key of foreignKeys) expected.delete(`${key.TABLE_NAME}.${key.COLUMN_NAME}>${key.REFERENCED_TABLE_NAME}.${key.REFERENCED_COLUMN_NAME}`);
   results.missing_canonical_foreign_keys = expected.size;
   const [[idempotencyIndex]] = await pool.query(`

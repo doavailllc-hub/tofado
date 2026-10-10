@@ -14,3 +14,13 @@ test('purchase invoice payment routes never query the catalog invoice table', ()
   assert.match(paymentWorkflow, /FROM invoices i/);
   assert.match(paymentWorkflow, /UPDATE invoices/);
 });
+
+test('storefront orders preserve authenticated retailer ownership without exposing accounts', () => {
+  const source = fs.readFileSync(new URL('../src/app.js', import.meta.url), 'utf8');
+  assert.match(source, /"\/api\/public\/catalog\/:slug\/orders",\s*optionalAuth/);
+  assert.match(source, /req\.user\?\.id \|\| null/);
+  assert.match(source, /order\.retailer_id/);
+  assert.doesNotMatch(source, /temporary_password/);
+  assert.doesNotMatch(source, /UPDATE users\s+SET\s+business_name/);
+  assert.match(source, /RETAILER_ACCOUNT_REQUIRED/);
+});
