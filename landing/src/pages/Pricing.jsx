@@ -9,6 +9,7 @@ const plans = [
     text: "For small businesses testing digital B2B commerce.",
     features: ["Business profile", "Basic product catalog", "Public catalog link", "Order receiving", "Email support"],
     cta: "Start free",
+    role: "retailer",
   },
   {
     name: "Business",
@@ -18,6 +19,7 @@ const plans = [
     featured: true,
     features: ["14-day free trial", "Unlimited catalog products", "Up to 8 team members", "Order workflow", "GST-ready invoices", "Payment and delivery management", "Commerce intelligence", "Priority support"],
     cta: "Start 14-day trial",
+    role: "wholesaler",
   },
   {
     name: "Enterprise",
@@ -25,10 +27,13 @@ const plans = [
     text: "For larger companies, groups, and multi-location operations.",
     features: ["Everything in Business", "Multiple branches", "Custom roles", "API access", "Custom onboarding", "Advanced reporting", "Dedicated support"],
     cta: "Contact sales",
+    href: "/contact",
   },
 ];
 
 export default function Pricing() {
+  const merchantAppUrl = import.meta.env.VITE_MERCHANT_APP_URL || "http://localhost:5173/login";
+  const applyUrl = role => `${merchantAppUrl.replace(/\/login$/, "")}/apply?role=${role}`;
   return (
     <>
       <section className="page-hero">
@@ -54,7 +59,7 @@ export default function Pricing() {
               <h3>{plan.name}</h3>
               <p>{plan.text}</p>
               <div className="price"><strong>{plan.price}</strong>{plan.period && <span>{plan.period}</span>}</div>
-              <a href="/contact" className={plan.featured ? "primary-button" : "secondary-button"}>{plan.cta}</a>
+              <a href={plan.href || applyUrl(plan.role)} className={plan.featured ? "primary-button" : "secondary-button"}>{plan.cta}</a>
               <ul>
                 {plan.features.map((feature) => (
                   <li key={feature}><CheckCircle2 size={17} /> {feature}</li>

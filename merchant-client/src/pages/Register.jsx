@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
   BadgeCheck,
@@ -84,7 +84,12 @@ const initialForm = {
 };
 
 export default function Register() {
-  const [form, setForm] = useState(initialForm);
+  const [searchParams] = useSearchParams();
+  const requestedRole = searchParams.get("role");
+  const [form, setForm] = useState(() => ({
+    ...initialForm,
+    role: requestedRole === "wholesaler" ? "wholesaler" : "retailer",
+  }));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);

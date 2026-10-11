@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   Bell,
+  AlertTriangle,
   ChevronDown,
   FileText,
   LayoutDashboard,
@@ -23,6 +24,7 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "../context/AuthContext";
+import api from "../services/api";
 import logo from "../assets/tofado-logo.png";
 import "./Layout.css";
 
@@ -196,6 +198,7 @@ export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [openMenu, setOpenMenu] = useState("");
+  const [subscription, setSubscription] = useState(null);
 
   const role = roleMeta[user?.role] || roleMeta.admin;
   const items = menus[user?.role] || [];
@@ -229,6 +232,15 @@ export default function Layout() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
+
+  useEffect(() => {
+    if (user?.role !== "wholesaler") return;
+    let active = true;
+    api.get("/wholesaler/subscription")
+      .then(({ data }) => { if (active) setSubscription(data?.subscription || null); })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [user?.role]);
 
   const signOut = () => {
     logout();
@@ -438,6 +450,19 @@ export default function Layout() {
           </div>
         </header>
 
+        {subscription && (subscription.status === "trialing" || subscription.status === "past_due" || subscription.cancel_at_period_end) && (
+          <div className={`tf-subscription-banner ${subscription.status === "past_due" ? "danger" : ""}`}>
+            <AlertTriangle size={18} />
+            <span>
+              {subscription.status === "past_due"
+                ? `Subscription payment failed. Grace access ends ${new Date(subscription.grace_period_ends_at).toLocaleDateString("en-IN")}.`
+                : subscription.cancel_at_period_end
+                  ? `Subscription cancellation is scheduled for ${new Date(subscription.current_period_ends_at).toLocaleDateString("en-IN")}.`
+                  : `Your Tofado Business trial ends ${new Date(subscription.trial_ends_at).toLocaleDateString("en-IN")}.`}
+            </span>
+            <button type="button" onClick={() => navigate("/wholesaler/subscription")}>Manage subscription</button>
+          </div>
+        )}
         <section className="tf-content"><Outlet /></section>
       </main>
     </div>
