@@ -7,7 +7,7 @@ import { demoSubscription, subscriptionAccess, subscriptionPlan, subscriptionPla
 const router=express.Router(); router.use(auth,allow('wholesaler'));
 const query=async(sql,params=[])=>(await pool.query(sql,params))[0];
 async function current(id){
-  await query(`INSERT IGNORE INTO merchant_subscriptions(wholesaler_id,plan_code,status,trial_ends_at) VALUES(?,'starter','trialing',DATE_ADD(NOW(),INTERVAL 14 DAY))`,[id]);
+  await query(`INSERT IGNORE INTO merchant_subscriptions(wholesaler_id,plan_code,status,trial_ends_at) VALUES(?,'growth','trialing',DATE_ADD(NOW(),INTERVAL 14 DAY))`,[id]);
   const [row]=await query(`SELECT s.*,(SELECT JSON_OBJECT('status',a.status,'failure_code',a.failure_code,'failure_message',a.failure_message,'attempted_at',a.attempted_at) FROM subscription_payment_attempts a WHERE a.subscription_id=s.id ORDER BY a.id DESC LIMIT 1) latest_attempt FROM merchant_subscriptions s WHERE s.wholesaler_id=?`,[id]);
   const plan=subscriptionPlan(row.plan_code); return {...row,...plan,latest_attempt:typeof row.latest_attempt==='string'?JSON.parse(row.latest_attempt):row.latest_attempt,access:subscriptionAccess(row),billing_mode:process.env.SUBSCRIPTION_PROVIDER?'live':'setup_required'};
 }

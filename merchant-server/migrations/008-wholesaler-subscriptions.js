@@ -2,7 +2,7 @@ export async function up(connection) {
   await connection.query(`CREATE TABLE IF NOT EXISTS merchant_subscriptions (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     wholesaler_id BIGINT UNSIGNED NOT NULL,
-    plan_code ENUM('starter','growth','scale') NOT NULL DEFAULT 'starter',
+    plan_code ENUM('starter','growth','scale') NOT NULL DEFAULT 'growth',
     status ENUM('trialing','active','past_due','cancelled','expired') NOT NULL DEFAULT 'trialing',
     trial_ends_at DATETIME NULL,
     current_period_starts_at DATETIME NULL,

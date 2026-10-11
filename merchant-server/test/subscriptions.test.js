@@ -15,6 +15,6 @@ test('billing demo exposes failure and cancellation without payment data',()=>{
   assert.equal(failed.status,'past_due'); assert.equal(failed.latest_attempt.status,'failed'); assert.equal(failed.access.allowed,true);
   const cancelling=demoSubscription('cancelled',now);
   assert.equal(cancelling.cancel_at_period_end,true); assert.equal(cancelling.status,'active');
-  assert.equal(subscriptionPlan('growth').monthly_price,2499);
+  assert.equal(subscriptionPlan('growth').monthly_price,1999);
   assert.equal('card_number' in failed,false);
 });

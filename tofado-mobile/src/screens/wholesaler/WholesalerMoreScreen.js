@@ -10,6 +10,7 @@ const items = [
   ["Deliveries", "car-outline", "Deliveries"],
   ["Invoices", "receipt-outline", "WholesalerInvoices"],
   ["Payments", "wallet-outline", "WholesalerPayments"],
+  ["Subscription · ₹1,999/month", "card-outline", "Subscription"],
   ["Business profile", "business-outline", "Profile"],
 ];
 
