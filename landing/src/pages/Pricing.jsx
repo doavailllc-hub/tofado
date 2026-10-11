@@ -12,12 +12,12 @@ const plans = [
   },
   {
     name: "Business",
-    price: "INR 149",
+    price: "INR 1,999",
     period: "/ month",
     text: "For growing retailers and wholesalers that need complete operations.",
     featured: true,
-    features: ["Everything in Starter", "Unlimited catalog products", "Order workflow", "Invoice generation", "Payment terms", "Delivery management", "Business analytics", "Priority support"],
-    cta: "Start business",
+    features: ["14-day free trial", "Unlimited catalog products", "Up to 8 team members", "Order workflow", "GST-ready invoices", "Payment and delivery management", "Commerce intelligence", "Priority support"],
+    cta: "Start 14-day trial",
   },
   {
     name: "Enterprise",
@@ -44,7 +44,7 @@ export default function Pricing() {
         <SectionHeading
           eyebrow="Transparent pricing"
           title="Choose the right plan for your business"
-          text="Prices shown are sample launch pricing and can be changed before production."
+          text="Start free, then unlock complete wholesale operations with Tofado Business at INR 1,999 per month."
         />
 
         <div className="pricing-grid">
