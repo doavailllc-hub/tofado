@@ -250,10 +250,6 @@ export default function Layout() {
               <img src={logo} alt="Tofado Merchant" />
             </span>
 
-            <span className="tf-brand-copy">
-              <strong>Tofado</strong>
-              <small>Merchant workspace</small>
-            </span>
           </NavLink>
           <button
             type="button"
