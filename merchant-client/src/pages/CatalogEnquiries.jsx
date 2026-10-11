@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Clock3,
+  Copy,
+  IndianRupee,
   Mail,
   MessageSquare,
   Phone,
@@ -29,6 +31,9 @@ const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
+  const [quotingId, setQuotingId] = useState(null);
+  const [quoteLink, setQuoteLink] = useState("");
+  const [quote, setQuote] = useState({ unit_price: "", gst_rate: "0", delivery_fee: "0", valid_days: "7", notes: "" });
 
 const loadEnquiries = async (showRefresh = false) => {
   try {
@@ -168,6 +173,19 @@ const loadEnquiries = async (showRefresh = false) => {
     } finally {
       setUpdatingId(null);
     }
+  };
+
+  const sendPrice = async (event, enquiry) => {
+    event.preventDefault();
+    try {
+      setUpdatingId(enquiry.id); setError(""); setQuoteLink("");
+      const { data } = await api.post(`/wholesaler/catalog/enquiries/${enquiry.id}/quote`, quote);
+      const link = `${window.location.origin}/quote/${data.token}`;
+      setQuoteLink(link);
+      setEnquiries((current) => current.map((item) => item.id === enquiry.id ? { ...item, status: "quoted", quote_unit_price: Number(quote.unit_price), quote_sent_at: new Date().toISOString() } : item));
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || "Unable to create the price offer.");
+    } finally { setUpdatingId(null); }
   };
 
   if (loading) {
@@ -402,7 +420,24 @@ const loadEnquiries = async (showRefresh = false) => {
                       Email
                     </a>
                   )}
+                  <button type="button" onClick={() => { setQuotingId(enquiry.id); setQuoteLink(""); setQuote((current) => ({ ...current, unit_price: enquiry.quote_unit_price || "" })); }}>
+                    <IndianRupee size={15} /> {enquiry.quote_sent_at ? "Send new price" : "Send price"}
+                  </button>
                 </div>
+
+                {quotingId === enquiry.id && (
+                  <form className="catalog-enquiry-quote-form" onSubmit={(event) => sendPrice(event, enquiry)}>
+                    <div className="catalog-quote-grid">
+                      <label><span>Unit price (INR)</span><input required min="0.01" step="0.01" type="number" value={quote.unit_price} onChange={(event) => setQuote({ ...quote, unit_price: event.target.value })} /></label>
+                      <label><span>GST %</span><input min="0" max="100" step="0.01" type="number" value={quote.gst_rate} onChange={(event) => setQuote({ ...quote, gst_rate: event.target.value })} /></label>
+                      <label><span>Delivery fee</span><input min="0" step="0.01" type="number" value={quote.delivery_fee} onChange={(event) => setQuote({ ...quote, delivery_fee: event.target.value })} /></label>
+                      <label><span>Valid for days</span><input min="1" max="90" type="number" value={quote.valid_days} onChange={(event) => setQuote({ ...quote, valid_days: event.target.value })} /></label>
+                    </div>
+                    <label><span>Offer notes</span><input maxLength="500" value={quote.notes} onChange={(event) => setQuote({ ...quote, notes: event.target.value })} placeholder="Delivery time, payment terms or product details" /></label>
+                    <div className="catalog-quote-actions"><button type="submit" disabled={updatingId === enquiry.id}>Create acceptance link</button><button type="button" onClick={() => setQuotingId(null)}>Cancel</button></div>
+                    {quoteLink && <div className="catalog-quote-link"><input readOnly value={quoteLink} /><button type="button" onClick={() => navigator.clipboard.writeText(quoteLink)}><Copy size={15} /> Copy link</button>{enquiry.phone && <a target="_blank" rel="noreferrer" href={`https://wa.me/${String(enquiry.phone).replace(/\D/g, "")}?text=${encodeURIComponent(`Your price offer is ready: ${quoteLink}`)}`}>Send on WhatsApp</a>}</div>}
+                  </form>
+                )}
 
                 <div className="catalog-enquiry-footer">
                   <span>

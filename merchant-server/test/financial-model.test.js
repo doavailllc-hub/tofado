@@ -24,3 +24,14 @@ test('storefront orders preserve authenticated retailer ownership without exposi
   assert.doesNotMatch(source, /UPDATE users\s+SET\s+business_name/);
   assert.match(source, /RETAILER_ACCOUNT_REQUIRED/);
 });
+
+test('enquiry quotes use bearer-token hashes and create orders atomically', () => {
+  const source = fs.readFileSync(new URL('../src/app.js', import.meta.url), 'utf8');
+  assert.match(source, /"\/api\/wholesaler\/catalog\/enquiries\/:id\/quote"/);
+  assert.match(source, /"\/api\/public\/enquiry-quotes\/:token\/accept", optionalAuth/);
+  assert.match(source, /createHash\("sha256"\)/);
+  assert.match(source, /WHERE e\.quote_token_hash=\? LIMIT 1 FOR UPDATE/);
+  assert.match(source, /quote_order_id IS NULL/);
+  assert.match(source, /INSERT INTO wholesale_catalog_orders/);
+  assert.match(source, /await connection\.commit\(\)/);
+});

@@ -3086,6 +3086,14 @@ app.get(
           e.message,
           e.quantity,
           e.status,
+          e.quote_unit_price,
+          e.quote_gst_rate,
+          e.quote_delivery_fee,
+          e.quote_valid_until,
+          e.quote_notes,
+          e.quote_sent_at,
+          e.quote_accepted_at,
+          e.quote_order_id,
           e.created_at,
           e.updated_at,
 
@@ -3149,6 +3157,88 @@ app.patch(
     }
   })
 );
+
+app.post(
+  "/api/wholesaler/catalog/enquiries/:id/quote",
+  auth,
+  allow("wholesaler"),
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    const unitPrice = Number(req.body?.unit_price);
+    const gstRate = Number(req.body?.gst_rate || 0);
+    const deliveryFee = Number(req.body?.delivery_fee || 0);
+    const validDays = Math.min(90, Math.max(1, Number(req.body?.valid_days || 7)));
+    if (!Number.isSafeInteger(id) || id <= 0 || !Number.isFinite(unitPrice) || unitPrice <= 0 || !Number.isFinite(gstRate) || gstRate < 0 || gstRate > 100 || !Number.isFinite(deliveryFee) || deliveryFee < 0) {
+      return res.status(400).json({ message: "Enter a valid price, GST rate and delivery fee." });
+    }
+    const token = crypto.randomBytes(32).toString("hex");
+    const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+    const result = await q(
+      `UPDATE wholesale_catalog_enquiries SET quote_unit_price=?, quote_gst_rate=?, quote_delivery_fee=?,
+       quote_valid_until=DATE_ADD(NOW(), INTERVAL ? DAY), quote_notes=?, quote_token_hash=?,
+       quote_sent_at=NOW(), quote_accepted_at=NULL, quote_order_id=NULL, status='quoted', updated_at=NOW()
+       WHERE id=? AND wholesaler_id=? AND quote_order_id IS NULL`,
+      [unitPrice, gstRate, deliveryFee, validDays, String(req.body?.notes || "").trim().slice(0, 500) || null, tokenHash, id, req.user.id]
+    );
+    if (!result.affectedRows) return res.status(409).json({ message: "Enquiry not found or its accepted offer cannot be replaced." });
+    return res.json({ message: "Price offer created.", token, expires_in_days: validDays });
+  })
+);
+
+const quoteTokenHash = (token) => crypto.createHash("sha256").update(String(token || "")).digest("hex");
+
+app.get("/api/public/enquiry-quotes/:token", asyncHandler(async (req, res) => {
+  const [quote] = await q(
+    `SELECT e.id,e.customer_name,e.business_name,e.phone,e.email,e.quantity,e.quote_unit_price,e.quote_gst_rate,
+      e.quote_delivery_fee,e.quote_valid_until,e.quote_notes,e.quote_accepted_at,e.quote_order_id,
+      p.name product_name,p.unit,u.business_name wholesaler_name,u.phone wholesaler_phone
+     FROM wholesale_catalog_enquiries e JOIN wholesale_products p ON p.id=e.product_id
+     JOIN users u ON u.id=e.wholesaler_id WHERE e.quote_token_hash=? LIMIT 1`,
+    [quoteTokenHash(req.params.token)]
+  );
+  if (!quote) return res.status(404).json({ message: "Price offer not found." });
+  const subtotal = Number(quote.quote_unit_price) * Number(quote.quantity);
+  const tax = subtotal * Number(quote.quote_gst_rate) / 100;
+  res.json({ ...quote, subtotal, tax_amount: tax, total_amount: subtotal + tax + Number(quote.quote_delivery_fee), expired: new Date(quote.quote_valid_until).getTime() < Date.now() });
+}));
+
+app.post("/api/public/enquiry-quotes/:token/accept", optionalAuth, asyncHandler(async (req, res) => {
+  if (req.user && req.user.role !== "retailer") return res.status(403).json({ message: "Only retailer accounts can accept this offer." });
+  const deliveryAddress = String(req.body?.delivery_address || "").trim();
+  if (!deliveryAddress) return res.status(400).json({ message: "Delivery address is required." });
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const [[quote]] = await connection.query(
+      `SELECT e.*,p.name product_name,p.sku,p.unit,p.stock_quantity,p.is_active,c.id catalog_id
+       FROM wholesale_catalog_enquiries e JOIN wholesale_products p ON p.id=e.product_id
+       JOIN wholesale_catalogs c ON c.wholesaler_id=e.wholesaler_id
+       WHERE e.quote_token_hash=? LIMIT 1 FOR UPDATE`,
+      [quoteTokenHash(req.params.token)]
+    );
+    if (!quote) throw Object.assign(new Error("Price offer not found."), { status: 404 });
+    if (quote.quote_order_id) throw Object.assign(new Error("This offer has already been accepted."), { status: 409 });
+    if (!quote.is_active || new Date(quote.quote_valid_until).getTime() < Date.now()) throw Object.assign(new Error("This price offer has expired or is unavailable."), { status: 410 });
+    const quantity = Number(quote.quantity), unitPrice = Number(quote.quote_unit_price);
+    if (quantity > Number(quote.stock_quantity)) throw Object.assign(new Error("The quoted quantity is no longer in stock."), { status: 409 });
+    const subtotal = quantity * unitPrice;
+    const total = subtotal + subtotal * Number(quote.quote_gst_rate) / 100 + Number(quote.quote_delivery_fee);
+    const orderNo = `CO-${Date.now().toString().slice(-10)}`;
+    const [orderResult] = await connection.query(
+      `INSERT INTO wholesale_catalog_orders(order_no,catalog_id,wholesaler_id,retailer_id,customer_name,business_name,phone,email,delivery_address,notes,status,total_amount)
+       VALUES(?,?,?,?,?,?,?,?,?,?,'pending',?)`,
+      [orderNo, quote.catalog_id, quote.wholesaler_id, req.user?.id || null, quote.customer_name, quote.business_name, quote.phone, quote.email, deliveryAddress, `Accepted enquiry quote ENQ-${quote.id}`, total]
+    );
+    await connection.query(
+      `INSERT INTO wholesale_catalog_order_items(order_id,product_id,product_name,sku,unit,price,quantity,line_total) VALUES(?,?,?,?,?,?,?,?)`,
+      [orderResult.insertId, quote.product_id, quote.product_name, quote.sku, quote.unit || "piece", unitPrice, quantity, subtotal]
+    );
+    await connection.query(`UPDATE wholesale_catalog_enquiries SET quote_accepted_at=NOW(),quote_order_id=?,status='closed',updated_at=NOW() WHERE id=?`, [orderResult.insertId, quote.id]);
+    await connection.commit();
+    res.status(201).json({ message: "Offer accepted and order created.", id: orderResult.insertId, order_no: orderNo, total_amount: total });
+  } catch (error) { await connection.rollback(); throw error; }
+  finally { connection.release(); }
+}));
 // ======================================================
 // WHOLESALER: CREATE RETAILER MANUALLY
 // POST /api/wholesaler/retailers

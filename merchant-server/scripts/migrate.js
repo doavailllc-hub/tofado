@@ -6,6 +6,7 @@ import { up as unifiedInvoicesUp } from '../migrations/003-unified-invoices.js';
 import { up as invoiceOriginConstraintUp } from '../migrations/004-invoice-origin-constraint.js';
 import { up as storefrontRetailerLinkUp } from '../migrations/005-storefront-retailer-link.js';
 import { up as commerceIntelligenceUp } from '../migrations/006-commerce-intelligence.js';
+import { up as enquiryQuotesUp } from '../migrations/007-enquiry-quotes.js';
 
 if (process.argv.includes('--help')) {
   console.log('Runs ordered forward-only schema migrations using MIGRATION_DB_* variables. It does not rewrite financial balances. Test on staging and record a restore point first.');
@@ -29,6 +30,7 @@ try {
     ['004-invoice-origin-constraint', invoiceOriginConstraintUp],
     ['005-storefront-retailer-link', storefrontRetailerLinkUp],
     ['006-commerce-intelligence', commerceIntelligenceUp],
+    ['007-enquiry-quotes', enquiryQuotesUp],
   ];
   for (const [version, migrate] of migrations) {
     const [[existing]] = await connection.query('SELECT version FROM schema_migrations WHERE version = ?', [version]);

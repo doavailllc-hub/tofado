@@ -22,6 +22,7 @@ const ProductForm = lazy(() => import('./pages/ProductForm'));
 const CatalogOrders = lazy(() => import('./pages/CatalogOrders'));
 const CatalogEnquiries = lazy(() => import('./pages/CatalogEnquiries'));
 const PublicCatalog = lazy(() => import('./pages/PublicCatalog'));
+const EnquiryQuote = lazy(() => import('./pages/EnquiryQuote'));
 const AdminRequests = lazy(() => import('./pages/AdminRequests'));
 const AddRetailer = lazy(() => import('./pages/AddRetailer'));
 const AddRetailerFromEnquiry = lazy(() => import('./pages/AddRetailerFromEnquiry'));
@@ -48,6 +49,7 @@ export default function App() {
         path="/catalog/:slug"
         element={<PublicCatalog />}
       />
+      <Route path="/quote/:token" element={<EnquiryQuote />} />
 
       <Route
         element={

@@ -12,7 +12,7 @@ const required = {
   wholesale_catalog_orders: ['id', 'catalog_id', 'wholesaler_id'],
   wholesale_catalog_order_items: ['id', 'order_id', 'product_id'],
   wholesale_catalog_deliveries: ['id', 'order_id', 'wholesaler_id'],
-  wholesale_catalog_enquiries: ['id', 'wholesaler_id'],
+  wholesale_catalog_enquiries: ['id', 'wholesaler_id', 'quote_unit_price', 'quote_token_hash', 'quote_order_id'],
   wholesaler_retailers: ['id', 'wholesaler_id', 'retailer_id', 'status'],
 };
 try {

@@ -39,6 +39,19 @@
   font: inherit;
 }
 
+.catalog-enquiry-contact-actions button { display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:0 12px;border:1px solid #bfdbfe;border-radius:9px;color:var(--enq-blue);background:#eff6ff;font-size:9px;font-weight:800;cursor:pointer; }
+.catalog-enquiry-quote-form { margin:14px; padding:15px; border:1px solid #c7d2fe; border-radius:12px; background:#f8faff; }
+.catalog-quote-grid { display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px; }
+.catalog-enquiry-quote-form label span { display:block;margin-bottom:5px;color:var(--enq-body);font-size:9px;font-weight:700; }
+.catalog-enquiry-quote-form input { width:100%;min-height:40px;padding:0 10px;border:1px solid var(--enq-border);border-radius:8px;background:#fff; }
+.catalog-enquiry-quote-form > label { display:block;margin-top:10px; }
+.catalog-quote-actions,.catalog-quote-link { display:flex;align-items:center;gap:8px;margin-top:11px; }
+.catalog-quote-actions button,.catalog-quote-link button,.catalog-quote-link a { display:inline-flex;min-height:38px;align-items:center;justify-content:center;gap:6px;padding:0 12px;border:1px solid var(--enq-blue);border-radius:8px;text-decoration:none;cursor:pointer; }
+.catalog-quote-actions button:first-child,.catalog-quote-link button { color:#fff;background:var(--enq-blue); }
+.catalog-quote-actions button:last-child,.catalog-quote-link a { color:var(--enq-blue);background:#fff; }
+.catalog-quote-link input { flex:1; }
+@media(max-width:700px){.catalog-quote-grid{grid-template-columns:1fr 1fr}.catalog-quote-link{align-items:stretch;flex-direction:column}}
+
 /* HEADER */
 
 .catalog-enquiries-heading {
