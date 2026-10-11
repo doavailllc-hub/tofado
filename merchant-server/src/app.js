@@ -3113,6 +3113,42 @@ app.get(
     }
   })
 );
+
+app.patch(
+  "/api/wholesaler/catalog/enquiries/:id/status",
+  auth,
+  allow("wholesaler"),
+  asyncHandler(async (req, res, next) => {
+    try {
+      const enquiryId = Number(req.params.id);
+      const status = String(req.body?.status || "").trim().toLowerCase();
+      const allowedStatuses = new Set(["new", "contacted", "quoted", "closed"]);
+
+      if (!Number.isSafeInteger(enquiryId) || enquiryId <= 0) {
+        return res.status(400).json({ message: "Invalid enquiry ID." });
+      }
+
+      if (!allowedStatuses.has(status)) {
+        return res.status(400).json({ message: "Invalid enquiry status." });
+      }
+
+      const result = await q(
+        `UPDATE wholesale_catalog_enquiries
+         SET status = ?, updated_at = CURRENT_TIMESTAMP
+         WHERE id = ? AND wholesaler_id = ?`,
+        [status, enquiryId, req.user.id]
+      );
+
+      if (!result.affectedRows) {
+        return res.status(404).json({ message: "Enquiry not found." });
+      }
+
+      return res.json({ message: "Enquiry status updated.", id: enquiryId, status });
+    } catch (error) {
+      next(error);
+    }
+  })
+);
 // ======================================================
 // WHOLESALER: CREATE RETAILER MANUALLY
 // POST /api/wholesaler/retailers
