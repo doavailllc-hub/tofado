@@ -1831,7 +1831,9 @@ compare_price,
 
 const productPrice =
   cleanPriceMode === "quote"
-    ? null
+    // The legacy production schema keeps price NOT NULL. Quote mode is the
+    // source of truth for display and ordering, so persist a neutral value.
+    ? 0
     : Number(price);
 
 if (
@@ -2014,7 +2016,8 @@ const cleanPriceMode =
 
 const productPrice =
   cleanPriceMode === "quote"
-    ? null
+    // Keep quote-priced products compatible with the NOT NULL price column.
+    ? 0
     : Number(price);
 
 if (

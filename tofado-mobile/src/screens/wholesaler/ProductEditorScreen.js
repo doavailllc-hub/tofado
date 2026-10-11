@@ -7,7 +7,7 @@ import * as ImagePicker from "expo-image-picker";
 import api from "../../services/api";
 import KeyboardAwareScrollView from "../../components/KeyboardAwareScrollView";
 
-const CATEGORIES = ["Rice & Grains", "Flour & Baking", "Cooking Oil", "Pulses & Legumes", "Spices & Seasoning", "Beverages", "Dairy Products", "Frozen Foods", "Canned Foods", "Snacks & Confectionery", "Fresh Produce", "Meat & Poultry", "Cleaning & Household", "Personal Care", "Other"];
+const CATEGORIES = ["Rice & Grains", "Flour & Baking", "Cooking Oil", "Pulses & Legumes", "Spices & Seasoning", "Beverages", "Dairy Products", "Frozen Foods", "Canned Foods", "Snacks & Confectionery", "Fresh Produce", "Meat & Poultry", "Cleaning & Household", "Personal Care", "Textiles & Apparel", "Other"];
 const UNITS = ["piece", "pack", "box", "carton", "case", "bag", "bottle", "can", "jar", "tray", "bundle", "kg", "gram", "litre"];
 const EMPTY = { name:"", sku:"", brand:"", category_name:"", description:"", image_url:"", image_key:"", unit:"piece", pack_size:"", minimum_order:"1", price_mode:"fixed", price:"", stock_quantity:"", is_active:true };
 const STEPS = [

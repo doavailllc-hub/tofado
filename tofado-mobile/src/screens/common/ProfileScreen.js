@@ -37,6 +37,7 @@ export const BUSINESS_CATEGORIES = [
   "Meat & Poultry",
   "Cleaning & Household",
   "Personal Care",
+  "Textiles & Apparel",
   "General Trading",
   "Other",
 ];

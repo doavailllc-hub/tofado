@@ -35,6 +35,7 @@ const BUSINESS_CATEGORIES = [
   "Electronics",
   "Automotive",
   "Fashion & Apparel",
+  "Textiles & Apparel",
   "Office Supplies",
   "Cleaning & Hygiene",
   "Packaging",

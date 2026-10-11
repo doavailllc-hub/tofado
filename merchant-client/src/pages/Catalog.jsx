@@ -47,6 +47,7 @@ const PRODUCT_CATEGORIES = [
   "Meat & Poultry",
   "Cleaning & Household",
   "Personal Care",
+  "Textiles & Apparel",
   "Other",
 ];
 
