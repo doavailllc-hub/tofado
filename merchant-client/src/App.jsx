@@ -37,7 +37,7 @@ const RetailerWholesalers = lazy(() => import('./pages/RetailerWholesalers'));
 const RetailerConnectedWholesalers = lazy(() => import('./pages/RetailerConnectedWholesalers'));
 const RetailerWholesalerRequests = lazy(() => import('./pages/RetailerWholesalerRequests'));
 const WholesalerRetailerRequests = lazy(() => import('./pages/WholesalerRetailerRequests'));
-const CommerceIntelligence = lazy(() => import('./pages/CommerceIntelligence'));
+const CommerceIntelligence = lazy(() => import('./pages/CommerceWorkspace'));
 export default function App() {
   return (
     <Suspense fallback={<main role="status" style={{ padding: 32 }}>Loading...</main>}>
