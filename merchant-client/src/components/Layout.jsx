@@ -17,6 +17,7 @@ import {
   UserPlus,
   Clock3,
   Wallet,
+  CreditCard,
   Sparkles,
   X,
 } from "lucide-react";
@@ -147,6 +148,12 @@ const menus = {
       path: "/wholesaler/intelligence",
       icon: Sparkles,
       color: "purple",
+    },
+    {
+      label: "Subscription",
+      path: "/wholesaler/subscription",
+      icon: CreditCard,
+      color: "blue",
     },
     {
       label: "Business profile",

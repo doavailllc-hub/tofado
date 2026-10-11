@@ -14,6 +14,8 @@ const required = {
   wholesale_catalog_deliveries: ['id', 'order_id', 'wholesaler_id'],
   wholesale_catalog_enquiries: ['id', 'wholesaler_id', 'quote_unit_price', 'quote_token_hash', 'quote_order_id'],
   wholesaler_retailers: ['id', 'wholesaler_id', 'retailer_id', 'status'],
+  merchant_subscriptions: ['id', 'wholesaler_id', 'plan_code', 'status', 'current_period_ends_at', 'grace_period_ends_at', 'cancel_at_period_end'],
+  subscription_payment_attempts: ['id', 'subscription_id', 'amount', 'status', 'failure_code'],
 };
 try {
   const missing = await checkColumns(pool, required);
