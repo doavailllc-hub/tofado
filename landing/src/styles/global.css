@@ -121,10 +121,14 @@ h4 {
   color: var(--blue);
 }
 
-.main-nav .sell-nav-link {
+.sell-nav-link {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  color: var(--blue);
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
 }
 
 .nav-dropdown {

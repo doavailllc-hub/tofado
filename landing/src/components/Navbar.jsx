@@ -45,13 +45,13 @@ export default function Navbar() {
           </div>
 
           <NavLink to="/industries" onClick={close}>Industries</NavLink>
-          <NavLink to="/solutions/wholesalers" onClick={close} className="sell-nav-link"><Store size={16} /> Sell</NavLink>
           <NavLink to="/pricing" onClick={close}>Pricing</NavLink>
           <NavLink to="/about" onClick={close}>About</NavLink>
           <NavLink to="/contact" onClick={close}>Contact</NavLink>
         </nav>
 
         <div className="nav-actions">
+          <NavLink to="/solutions/wholesalers" onClick={close} className="sell-nav-link"><Store size={16} /> Sell</NavLink>
           <a href={merchantAppUrl} className="text-link">Sign in</a>
           <a href={`${merchantAppUrl.replace(/\/login$/, "")}/apply`} className="primary-button compact">
             Get started
