@@ -206,13 +206,13 @@ export default function AddRetailer() {
             <div><CreditCard size={20} /></div>
             <span>
               <strong>Commercial settings</strong>
-              <small>Set VAT, credit, and payment preferences.</small>
+              <small>Set GSTIN, credit, and payment preferences.</small>
             </span>
           </div>
 
           <div className="retailer-form-grid">
             <label className="retailer-field">
-              <span>VAT number</span>
+              <span>GSTIN</span>
               <input
                 value={form.vat_number}
                 placeholder="300000000000003"

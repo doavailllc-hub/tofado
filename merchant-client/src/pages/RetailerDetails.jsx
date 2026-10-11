@@ -614,7 +614,7 @@ function OverviewTab({ retailer }) {
 
         <div className="retailer-commercial-grid">
           <div>
-            <span>Tax / VAT number</span>
+            <span>GSTIN</span>
             <strong>
               {retailer.tax_number || "Not provided"}
             </strong>

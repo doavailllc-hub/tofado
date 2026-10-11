@@ -455,12 +455,12 @@ export default function Register() {
                   <input
                     required
                     value={form.location}
-                    placeholder="Riyadh, Saudi Arabia"
+                    placeholder="Bengaluru, Karnataka"
                     onChange={(e) => updateField("location", e.target.value)}
                   />
                 </Field>
 
-                <Field label="Tax / VAT number" icon={<FileBadge2 size={16} />}>
+                <Field label="GSTIN" icon={<FileBadge2 size={16} />}>
                   <input
                     value={form.tax_number}
                     placeholder="Optional"

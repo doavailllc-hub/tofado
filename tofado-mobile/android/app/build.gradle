@@ -87,14 +87,6 @@ def uploadAlias = System.getenv('TOFADO_UPLOAD_KEY_ALIAS')
 def uploadKeyPassword = System.getenv('TOFADO_UPLOAD_KEY_PASSWORD')
 def releaseSigningReady = uploadStore && uploadStorePassword && uploadAlias && uploadKeyPassword
 
-gradle.taskGraph.whenReady { graph ->
-    if (graph.allTasks.any { it.project == project && it.name.toLowerCase().contains('release') }) {
-        if (!releaseSigningReady || !file(uploadStore).isFile()) {
-            throw new GradleException('Release signing requires TOFADO_UPLOAD_STORE_FILE, TOFADO_UPLOAD_STORE_PASSWORD, TOFADO_UPLOAD_KEY_ALIAS and TOFADO_UPLOAD_KEY_PASSWORD. Use the existing upload identity for published apps.')
-        }
-    }
-}
-
 android {
     ndkVersion rootProject.ext.ndkVersion
 
@@ -152,7 +144,12 @@ android {
             signingConfig signingConfigs.debug
         }
         release {
-            signingConfig signingConfigs.release
+            // Android Studio's Generate Signed Bundle/APK wizard injects its
+            // selected JKS at build time. CI can still use the environment-
+            // backed signing config above when all four values are present.
+            if (releaseSigningReady) {
+                signingConfig signingConfigs.release
+            }
             def enableShrinkResources = findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'false'
             shrinkResources enableShrinkResources.toBoolean()
             minifyEnabled enableMinifyInReleaseBuilds

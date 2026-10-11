@@ -438,7 +438,7 @@ export default function InvoiceDetails() {
 
             <div className="invoice-registration-grid">
               <div>
-                <span>VAT number</span>
+                <span>GSTIN</span>
                 <strong>
                   {merchant.tax_number || "—"}
                 </strong>
@@ -495,7 +495,7 @@ export default function InvoiceDetails() {
 
             <div className="invoice-registration-grid">
               <div>
-                <span>VAT number</span>
+                <span>GSTIN</span>
                 <strong>
                   {retailer.tax_number || "—"}
                 </strong>
@@ -743,7 +743,7 @@ export default function InvoiceDetails() {
             </div>
 
             <div className="invoice-total-row">
-              <span>VAT / Tax</span>
+              <span>GST</span>
               <strong>
                 {formatMoney(summary.taxAmount)}
               </strong>

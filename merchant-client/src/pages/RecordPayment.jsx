@@ -184,6 +184,7 @@ export default function RecordPayment() {
               <select value={form.method} onChange={e => change("method", e.target.value)}>
                 <option value="cash">Cash</option>
                 <option value="bank_transfer">Bank transfer</option>
+                <option value="upi">UPI</option>
                 <option value="card">Card</option>
                 <option value="credit">Credit</option>
               </select>
@@ -191,7 +192,7 @@ export default function RecordPayment() {
 
             <label className="payment-field">
               <span>Reference number</span>
-              <div className="payment-input-icon"><Hash size={17}/><input value={form.reference_no} placeholder="Bank or receipt reference" onChange={e => change("reference_no", e.target.value)}/></div>
+              <div className="payment-input-icon"><Hash size={17}/><input value={form.reference_no} placeholder="UPI, bank, or receipt reference" onChange={e => change("reference_no", e.target.value)}/></div>
             </label>
 
             <label className="payment-field">

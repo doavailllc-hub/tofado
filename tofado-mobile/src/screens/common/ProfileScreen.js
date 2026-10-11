@@ -1119,7 +1119,7 @@ export default function ProfileScreen() {
                   icon="location-outline"
                   value={profileData.location}
                   onChangeText={(v) => updateField("location", v)}
-                  placeholder="e.g. Riyadh, Saudi Arabia"
+                  placeholder="e.g. Bengaluru, Karnataka"
                 />
 
                 <FormInput
@@ -1135,7 +1135,7 @@ export default function ProfileScreen() {
                   icon="document-text-outline"
                   value={profileData.tax_number}
                   onChangeText={(v) => updateField("tax_number", v)}
-                  placeholder="Commercial registration or VAT number"
+                  placeholder="15-character GSTIN"
                 />
 
                 <FormInput

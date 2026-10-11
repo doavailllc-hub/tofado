@@ -17,6 +17,7 @@ import "dotenv/config";
 import { config } from './config.js';
 import { validatePurchaseOrder, recordNumber, ORDER_TRANSITIONS, canTransition } from './utils/orders.js';
 import { availableInvoiceBalance, invoiceState, paymentIdempotencyKey, validPaymentAmount } from './utils/finance.js';
+import { isValidGstin, isValidIndianPhone, normalizeGstin, normalizeIndianPhone } from './utils/india.js';
 import { authColumns, registrationColumns, requireColumns } from './schema.js';
 import { rateLimit } from 'express-rate-limit';
 import { asyncHandler, requestContext, errorHandler, logFailure } from './middleware/http.js';
@@ -226,11 +227,19 @@ function validateProfilePayload(body = {}) {
     }
   }
 
+  if (!isValidIndianPhone(body.phone)) {
+    return "Enter a valid 10-digit Indian mobile number.";
+  }
+
   if (
     body.website &&
     !/^https?:\/\/.+/i.test(String(body.website).trim())
   ) {
     return "Website must start with http:// or https://.";
+  }
+
+  if (!isValidGstin(body.tax_number)) {
+    return "Enter a valid 15-character GSTIN.";
   }
 
   return "";
@@ -270,10 +279,10 @@ app.post("/api/applications", asyncHandler(async (req, res, next) => {
     const cleanBusinessCategory = String(business_category || "").trim();
     const cleanShopType = String(shop_type || "").trim();
     const cleanEmail = String(email || "").trim().toLowerCase();
-    const cleanPhone = String(phone || "").trim();
+    const cleanPhone = normalizeIndianPhone(phone);
     const cleanLocation = String(location || "").trim();
     const cleanAddress = String(address || "").trim();
-    const cleanTaxNumber = String(tax_number || "").trim() || null;
+    const cleanTaxNumber = normalizeGstin(tax_number) || null;
     const cleanLicenseNumber =
       String(license_number || "").trim() || null;
     const cleanPassword = String(password || "");
@@ -308,6 +317,14 @@ app.post("/api/applications", asyncHandler(async (req, res, next) => {
       return res.status(400).json({
         message: "Enter a valid email address.",
       });
+    }
+
+    if (!isValidIndianPhone(cleanPhone)) {
+      return res.status(400).json({ message: "Enter a valid 10-digit Indian mobile number." });
+    }
+
+    if (!isValidGstin(cleanTaxNumber)) {
+      return res.status(400).json({ message: "Enter a valid 15-character GSTIN." });
     }
 
     const existing = await q(
@@ -768,10 +785,10 @@ app.put("/api/profile", auth, asyncHandler(async (req, res, next) => {
       [
         name.trim(),
         business_name.trim(),
-        phone.trim(),
+        normalizeIndianPhone(phone),
         location.trim(),
         address.trim(),
-        tax_number.trim(),
+        normalizeGstin(tax_number),
         business_category.trim(),
         shop_type.trim(),
         description.trim(),
@@ -968,10 +985,10 @@ app.post(
       const fields = {
         name: String(req.body?.name || "").trim(),
         business_name: String(req.body?.business_name || "").trim(),
-        phone: String(req.body?.phone || "").trim(),
+        phone: normalizeIndianPhone(req.body?.phone),
         location: String(req.body?.location || "").trim(),
         address: String(req.body?.address || "").trim(),
-        tax_number: String(req.body?.tax_number || "").trim(),
+        tax_number: normalizeGstin(req.body?.tax_number),
         license_number: String(req.body?.license_number || "").trim(),
         business_category: String(req.body?.business_category || "").trim(),
         shop_type: String(req.body?.shop_type || "").trim(),
@@ -981,6 +998,10 @@ app.post(
         return res.status(400).json({
           message: "Complete all required verification details.",
         });
+      }
+
+      if (!isValidGstin(fields.tax_number)) {
+        return res.status(400).json({ message: "Enter a valid 15-character GSTIN." });
       }
 
       const [user] = await q(
@@ -4674,6 +4695,7 @@ app.post(
       const allowedMethods = [
         "cash",
         "bank_transfer",
+        "upi",
         "card",
         "credit",
       ];
@@ -6203,6 +6225,7 @@ app.post(
       const allowedMethods = [
         "cash",
         "bank_transfer",
+        "upi",
         "card",
         "credit",
       ];
@@ -6226,12 +6249,12 @@ app.post(
       }
 
       if (
-        ["bank_transfer", "card"].includes(method) &&
+        ["bank_transfer", "upi", "card"].includes(method) &&
         !referenceNo
       ) {
         return res.status(400).json({
           message:
-            "Payment reference is required for bank transfer or card payment.",
+            "Payment reference is required for bank transfer, UPI, or card payment.",
         });
       }
 

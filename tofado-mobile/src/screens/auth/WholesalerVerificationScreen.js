@@ -15,7 +15,7 @@ const steps = [
   { title: "Tell us about the business", copy: "Enter the company or shop name customers recognize.", fields: [["business_name", "Company / shop name", "business-outline"], ["business_category", "Business category", "grid-outline"], ["shop_type", "Company / shop type", "storefront-outline"]] },
   { title: "How can we reach you?", copy: "We may use this number during verification.", fields: [["phone", "Phone number", "call-outline"]] },
   { title: "Where is the business?", copy: "Provide the registered operating address.", fields: [["location", "City", "location-outline"], ["address", "Full business address", "map-outline"]] },
-  { title: "Registration details", copy: "Enter the numbers exactly as they appear on official documents.", fields: [["tax_number", "GST / VAT number", "receipt-outline"], ["license_number", "Company registration number", "document-text-outline"]] },
+  { title: "Registration details", copy: "Enter the numbers exactly as they appear on official documents.", fields: [["tax_number", "GSTIN", "receipt-outline"], ["license_number", "Company registration number", "document-text-outline"]] },
   { title: "Add your company logo", copy: "A clear square logo helps retailers identify your business.", fields: [] },
   { title: "Review and apply", copy: "Confirm the information below before sending it for verification.", fields: [] },
 ];
@@ -49,7 +49,7 @@ export default function WholesalerVerificationScreen() {
   const reviewRows = useMemo(() => Object.entries({
     "Contact person": form.name, "Company / shop": form.business_name, "Phone": form.phone,
     "Business type": [form.business_category, form.shop_type].filter(Boolean).join(" · "),
-    "Address": [form.address, form.location].filter(Boolean).join(", "), "GST / VAT": form.tax_number,
+    "Address": [form.address, form.location].filter(Boolean).join(", "), "GSTIN": form.tax_number,
     "Registration": form.license_number,
   }), [form]);
 

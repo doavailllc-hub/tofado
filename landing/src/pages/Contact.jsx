@@ -36,7 +36,7 @@ export default function Contact() {
             <article><Mail size={20} /><span><small>Email</small><strong>contact@tofado.com</strong></span></article>
 
             <article><MessageCircle size={20} /><span><small>WhatsApp</small><strong>Available for business enquiries</strong></span></article>
-            <article><MapPin size={20} /><span><small>Region</small><strong>Saudi Arabia & GCC</strong></span></article>
+            <article><MapPin size={20} /><span><small>Market</small><strong>India</strong></span></article>
           </div>
         </div>
 

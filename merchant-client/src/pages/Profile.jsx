@@ -633,7 +633,7 @@ export default function Profile() {
 
                 <input
                   value={form.location}
-                  placeholder="Example: Jubail, Saudi Arabia"
+                  placeholder="Example: Bengaluru, Karnataka"
                   onChange={(event) =>
                     updateField("location", event.target.value)
                   }
@@ -643,7 +643,7 @@ export default function Profile() {
             </label>
 
             <label className="business-profile-field">
-              <span>Tax or VAT number</span>
+              <span>GSTIN</span>
 
               <div className="business-profile-control">
                 <FileBadge2 size={18} />

@@ -567,6 +567,7 @@ export default function RetailerInvoiceDetails() {
                   <option value="bank_transfer">
                     Bank transfer
                   </option>
+                  <option value="upi">UPI</option>
                   <option value="card">Card</option>
                   <option value="cash">Cash</option>
                   <option value="credit">Credit</option>
@@ -576,7 +577,7 @@ export default function RetailerInvoiceDetails() {
               <label>
                 <span>
                   Payment reference
-                  {["bank_transfer", "card"].includes(
+                  {["bank_transfer", "upi", "card"].includes(
                     payment.method
                   )
                     ? " *"

@@ -11,7 +11,7 @@ import { date, money, title } from "../../utils/format";
 
 const filters = ["all", "pending", "paid", "failed"];
 const statusOf = (row) => String(row.status || "pending").toLowerCase();
-const methodIcon = { cash: "cash-outline", bank_transfer: "business-outline", card: "card-outline", credit: "time-outline" };
+const methodIcon = { cash: "cash-outline", bank_transfer: "business-outline", upi: "phone-portrait-outline", card: "card-outline", credit: "time-outline" };
 
 export default function WholesalerPaymentsScreen({ navigation }) {
   const [rows, setRows] = useState([]); const [loading, setLoading] = useState(true); const [refreshing, setRefreshing] = useState(false); const [filter, setFilter] = useState("all"); const [error, setError] = useState("");

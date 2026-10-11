@@ -5,13 +5,13 @@ import { readFile } from "node:fs/promises";
 let source = await readFile(new URL("../src/utils/invoiceTemplates.js", import.meta.url), "utf8");
 source = source.replace(
   'import { money, date, title } from "./format";',
-  'const money=(value)=>`SAR ${Number(value||0).toFixed(2)}`; const date=(value)=>String(value||"—"); const title=(value)=>String(value||"—");'
+  'const money=(value)=>`INR ${Number(value||0).toFixed(2)}`; const date=(value)=>String(value||"—"); const title=(value)=>String(value||"—");'
 );
 const invoiceTemplates = await import("data:text/javascript;base64," + Buffer.from(source).toString("base64"));
 
 const payload = {
   invoice: { id: 8, invoice_no: "INV-008", total_amount: 125, paid_amount: 25, status: "partial", created_at: "2026-10-08", due_date: "2026-10-30" },
-  merchant: { business_name: "Seller & Sons", tax_number: "VAT-1" },
+  merchant: { business_name: "Seller & Sons", tax_number: "27AAPFU0939F1ZV" },
   retailer: { business_name: "Buyer <Store>" },
   items: [{ product_name: "Premium Rice", quantity: 5, unit: "bag", unit_price: 25, notes: "Keep <dry>" }],
   payments: [{ id: 1, method: "bank_transfer", amount: 25 }],
