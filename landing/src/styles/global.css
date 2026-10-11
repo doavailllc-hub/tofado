@@ -89,6 +89,17 @@ h4 {
   gap: 24px;
 }
 
+.brand {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+}
+
+.brand img {
+  width: 158px;
+  height: auto;
+}
+
 .main-nav {
   display: flex;
   align-items: center;
@@ -1607,6 +1618,10 @@ h4 {
 @media (max-width: 640px) {
   .nav-shell {
     width: min(100% - 24px, 1480px);
+  }
+
+  .brand img {
+    width: 135px;
   }
 
   .hero {

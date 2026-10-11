@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ChevronDown, Menu, X } from "lucide-react";
-import { NavLink } from "react-router-dom";
+import { Link, NavLink } from "react-router-dom";
+import logo from "../assets/tofado-logo.png";
 
 const merchantAppUrl =
   import.meta.env.VITE_MERCHANT_APP_URL || "http://localhost:5173/login";
@@ -17,6 +18,10 @@ export default function Navbar() {
   return (
     <header className="site-header">
       <div className="nav-shell">
+        <Link to="/" className="brand" onClick={close} aria-label="Tofado home">
+          <img src={logo} alt="Tofado" />
+        </Link>
+
         <nav className={open ? "main-nav open" : "main-nav"}>
           <div className="nav-dropdown">
             <button
