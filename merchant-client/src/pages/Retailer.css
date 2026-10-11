@@ -2809,6 +2809,14 @@ button.retailer-record-row:hover {
   box-shadow: var(--rt-shadow);
 }
 
+.retailer-invoice-document.invoice-template-executive { border-color: #d8ccb2; border-radius: 2px; }
+.retailer-invoice-document.invoice-template-executive .retailer-invoice-document-head { color: #fff; background: #152238; border-top: 8px solid var(--invoice-accent-custom, #c6922e); }
+.retailer-invoice-document.invoice-template-executive .retailer-invoice-brand strong,
+.retailer-invoice-document.invoice-template-executive .retailer-invoice-brand p,
+.retailer-invoice-document.invoice-template-executive .retailer-invoice-status-block small { color: #fff; }
+.retailer-invoice-document.invoice-template-clean { border-color: #d8eae4; border-radius: 10px; }
+.retailer-invoice-document.invoice-template-clean .retailer-invoice-document-head { border-top: 5px solid var(--invoice-accent-custom, #0f8b6d); background: #f0faf7; }
+
 .retailer-invoice-document-head {
   display: flex;
   align-items: flex-start;
@@ -3397,6 +3405,11 @@ button.retailer-record-row:hover {
 }
 
 @media print {
+  * {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
   body {
     background: #fff !important;
   }

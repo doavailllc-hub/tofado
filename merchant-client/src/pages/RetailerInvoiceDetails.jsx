@@ -20,6 +20,10 @@ import {
 } from "lucide-react";
 
 import api from "../services/api";
+import { useAuth } from "../context/AuthContext";
+import InvoiceTemplatePicker from "../components/InvoiceTemplatePicker";
+import { getInvoiceColor, getInvoiceTemplate, saveInvoiceColor, saveInvoiceTemplate } from "../services/invoicePreferences";
+import "./InvoiceDetails.css";
 import "./Retailer.css";
 
 const money = (value) =>
@@ -51,6 +55,9 @@ const title = (value) =>
 export default function RetailerInvoiceDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const [templateId, setTemplateId] = useState(() => getInvoiceTemplate(user?.id));
+  const [invoiceColor, setInvoiceColor] = useState(() => getInvoiceColor(user?.id));
 
   const [payload, setPayload] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -106,6 +113,16 @@ export default function RetailerInvoiceDetails() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    setTemplateId(getInvoiceTemplate(user?.id));
+    setInvoiceColor(getInvoiceColor(user?.id));
+  }, [user?.id]);
+
+  const chooseTemplate = (nextTemplate) => {
+    setTemplateId(saveInvoiceTemplate(user?.id, nextTemplate));
+  };
+  const chooseColor = (color) => setInvoiceColor(saveInvoiceColor(user?.id, color));
 
   const invoice = payload?.invoice;
   const items = Array.isArray(payload?.items)
@@ -293,7 +310,9 @@ export default function RetailerInvoiceDetails() {
         </div>
       )}
 
-      <section className="retailer-invoice-document">
+      <InvoiceTemplatePicker value={templateId} onChange={chooseTemplate} color={invoiceColor} onColorChange={chooseColor} />
+
+      <section className={`retailer-invoice-document invoice-template-${templateId}`} style={{ "--invoice-accent-custom": invoiceColor }}>
         <div className="retailer-invoice-document-head">
           <div className="retailer-invoice-brand">
             <div>

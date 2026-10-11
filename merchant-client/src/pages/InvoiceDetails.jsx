@@ -23,6 +23,9 @@ import {
 } from "lucide-react";
 
 import api from "../services/api";
+import { useAuth } from "../context/AuthContext";
+import InvoiceTemplatePicker from "../components/InvoiceTemplatePicker";
+import { getInvoiceColor, getInvoiceTemplate, saveInvoiceColor, saveInvoiceTemplate } from "../services/invoicePreferences";
 import {
   Badge,
   Spinner,
@@ -158,6 +161,9 @@ function getLineTotal(item) {
 export default function InvoiceDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const [templateId, setTemplateId] = useState(() => getInvoiceTemplate(user?.id));
+  const [invoiceColor, setInvoiceColor] = useState(() => getInvoiceColor(user?.id));
 
   const [invoice, setInvoice] = useState(emptyInvoice);
   const [merchant, setMerchant] = useState(emptyMerchant);
@@ -210,6 +216,16 @@ export default function InvoiceDetails() {
   useEffect(() => {
     loadInvoice();
   }, [loadInvoice]);
+
+  useEffect(() => {
+    setTemplateId(getInvoiceTemplate(user?.id));
+    setInvoiceColor(getInvoiceColor(user?.id));
+  }, [user?.id]);
+
+  const chooseTemplate = (nextTemplate) => {
+    setTemplateId(saveInvoiceTemplate(user?.id, nextTemplate));
+  };
+  const chooseColor = (color) => setInvoiceColor(saveInvoiceColor(user?.id, color));
 
   const summary = useMemo(() => {
     const subtotalFromItems = items.reduce(
@@ -352,7 +368,9 @@ export default function InvoiceDetails() {
         </div>
       )}
 
-      <main className="invoice-document">
+      <InvoiceTemplatePicker value={templateId} onChange={chooseTemplate} color={invoiceColor} onColorChange={chooseColor} />
+
+      <main className={`invoice-document invoice-template-${templateId}`} style={{ "--invoice-accent-custom": invoiceColor }}>
         <section className="invoice-document-header">
           <div className="invoice-brand">
             <div className="invoice-logo-wrap">

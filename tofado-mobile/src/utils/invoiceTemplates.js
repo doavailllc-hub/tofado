@@ -5,6 +5,8 @@ export const INVOICE_TEMPLATES = [
   { id: "executive", name: "Executive Gold", description: "Premium and formal", accent: "#C6922E", preview: "#152238" },
   { id: "clean", name: "Clean Emerald", description: "Minimal and crisp", accent: "#0F8B6D", preview: "#E7F6F1" },
 ];
+export const INVOICE_COLORS = ["#1A73E8", "#0F8B6D", "#C6922E", "#7C3AED", "#DC2626", "#334155"];
+export const normalizeInvoiceColor = (value) => /^#[0-9a-f]{6}$/i.test(String(value || "")) ? String(value).toUpperCase() : "#1A73E8";
 
 export const normalizeInvoiceTemplate = (value) =>
   INVOICE_TEMPLATES.some((template) => template.id === value) ? value : "modern";
@@ -12,15 +14,18 @@ export const normalizeInvoiceTemplate = (value) =>
 const escapeHtml = (value) => String(value ?? "—")
   .replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
 const lineTotal = (item) => Number(item.line_total ?? (Number(item.quantity || 0) * Number(item.unit_price || 0)));
-const themeFor = (templateId) => ({
+const themeFor = (templateId, color) => {
+  const theme = ({
   modern: { accent:"#1A73E8", soft:"#F3F8FF", page:"#F8FAFD", ink:"#172B3A", muted:"#5F6F7B", border:"#DDE7F0", radius:"18px", header:"#F3F8FF", headerText:"#172B3A", table:"#EDF5FF", balance:"#FFF4DD", balanceText:"#9A5A00" },
   executive: { accent:"#C6922E", soft:"#F8F3E8", page:"#F3F1EC", ink:"#152238", muted:"#6D685D", border:"#D8CCB2", radius:"2px", header:"#152238", headerText:"#FFFFFF", table:"#152238", balance:"#F5E7C8", balanceText:"#76500F" },
   clean: { accent:"#0F8B6D", soft:"#F0FAF7", page:"#FFFFFF", ink:"#17352E", muted:"#60756F", border:"#D8EAE4", radius:"10px", header:"#FFFFFF", headerText:"#17352E", table:"#E7F6F1", balance:"#E7F6F1", balanceText:"#08664F" },
-}[normalizeInvoiceTemplate(templateId)]);
+  }[normalizeInvoiceTemplate(templateId)]);
+  return { ...theme, accent: normalizeInvoiceColor(color || theme.accent) };
+};
 
-export function buildInvoiceHtml({ invoice = {}, merchant = {}, retailer = {}, items = [], payments = [] }, templateId = "modern") {
+export function buildInvoiceHtml({ invoice = {}, merchant = {}, retailer = {}, items = [], payments = [] }, templateId = "modern", color) {
   const selected = normalizeInvoiceTemplate(templateId);
-  const t = themeFor(selected);
+  const t = themeFor(selected, color);
   const subtotal = Number(invoice.subtotal || items.reduce((sum, item) => sum + lineTotal(item), 0));
   const tax = Number(invoice.tax_amount || 0);
   const total = Number(invoice.total_amount || subtotal + tax);

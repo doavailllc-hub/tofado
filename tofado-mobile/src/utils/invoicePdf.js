@@ -2,7 +2,7 @@ import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { money, date, title } from "./format";
 import { buildInvoiceHtml as buildTemplatedInvoiceHtml } from "./invoiceTemplates";
-export { INVOICE_TEMPLATES, normalizeInvoiceTemplate } from "./invoiceTemplates";
+export { INVOICE_COLORS, INVOICE_TEMPLATES, normalizeInvoiceTemplate } from "./invoiceTemplates";
 export const buildInvoiceHtml = buildTemplatedInvoiceHtml;
 
 const escapeHtml = (value) => String(value ?? "—")
@@ -30,10 +30,10 @@ function legacyBuildInvoiceHtml({ invoice = {}, merchant = {}, retailer = {}, it
 
 let activeExport = null;
 
-export async function exportInvoicePdf(payload, mode = "share", templateId = "modern") {
+export async function exportInvoicePdf(payload, mode = "share", templateId = "modern", color) {
   if (activeExport) return activeExport;
   activeExport = (async () => {
-    const { uri } = await Print.printToFileAsync({ html: buildTemplatedInvoiceHtml(payload, templateId), base64: false });
+    const { uri } = await Print.printToFileAsync({ html: buildTemplatedInvoiceHtml(payload, templateId, color), base64: false });
 
     if (mode === "download") {
       await Print.printAsync({ uri });

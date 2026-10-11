@@ -37,3 +37,8 @@ test("unknown invoice templates safely fall back to modern", () => {
   assert.equal(invoiceTemplates.normalizeInvoiceTemplate("unknown"), "modern");
   assert.match(invoiceTemplates.buildInvoiceHtml(payload, "unknown"), /class="doc modern"/);
 });
+
+test("custom brand color is included in printable invoice HTML", () => {
+  const html = invoiceTemplates.buildInvoiceHtml(payload, "clean", "#7C3AED");
+  assert.match(html, /#7C3AED/);
+});
