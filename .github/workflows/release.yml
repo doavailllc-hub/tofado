@@ -65,7 +65,11 @@ jobs:
         shell: bash
         env:
           BACKUP_REFERENCE: ${{ inputs.backup_reference }}
-        run: [[ "$BACKUP_REFERENCE" =~ ^[A-Za-z0-9._:/=-]{3,200}$ ]] || { echo 'backup_reference contains unsupported characters'; exit 1; }
+        run: |
+          [[ "$BACKUP_REFERENCE" =~ ^[A-Za-z0-9._:/=-]{3,200}$ ]] || {
+            echo 'backup_reference contains unsupported characters'
+            exit 1
+          }
       - name: Require promotion of the tested staging commit
         if: inputs.environment == 'production'
         shell: bash
