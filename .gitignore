@@ -12,6 +12,7 @@ dist/
 *.jks
 *.p12
 *.pfx
+.deploy/
 tofadokey
 tofadomerchantkey
 *.zip
