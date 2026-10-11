@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, Menu, X } from "lucide-react";
+import { ChevronDown, Menu, Store, X } from "lucide-react";
 import { Link, NavLink } from "react-router-dom";
 import logo from "../assets/tofado-logo.png";
 
@@ -45,6 +45,7 @@ export default function Navbar() {
           </div>
 
           <NavLink to="/industries" onClick={close}>Industries</NavLink>
+          <NavLink to="/solutions/wholesalers" onClick={close} className="sell-nav-link"><Store size={16} /> Sell</NavLink>
           <NavLink to="/pricing" onClick={close}>Pricing</NavLink>
           <NavLink to="/about" onClick={close}>About</NavLink>
           <NavLink to="/contact" onClick={close}>Contact</NavLink>

@@ -121,6 +121,12 @@ h4 {
   color: var(--blue);
 }
 
+.main-nav .sell-nav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .nav-dropdown {
   position: relative;
 }
