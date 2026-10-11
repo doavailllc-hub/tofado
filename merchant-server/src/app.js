@@ -19,6 +19,7 @@ import { validatePurchaseOrder, recordNumber, ORDER_TRANSITIONS, canTransition }
 import { availableInvoiceBalance, invoiceState, paymentIdempotencyKey, validPaymentAmount } from './utils/finance.js';
 import { isValidGstin, isValidIndianPhone, normalizeGstin, normalizeIndianPhone } from './utils/india.js';
 import { authColumns, registrationColumns, requireColumns } from './schema.js';
+import commerceRouter from './routes/commerce.js';
 import { rateLimit } from 'express-rate-limit';
 import { asyncHandler, requestContext, errorHandler, logFailure } from './middleware/http.js';
 import { pool } from "./db.js";
@@ -7530,6 +7531,8 @@ app.get(
     }
   })
 );
+
+app.use('/api/commerce', commerceRouter);
 
 app.get('/api/ready', asyncHandler(async (req, res) => {
   await pool.query('SELECT 1');

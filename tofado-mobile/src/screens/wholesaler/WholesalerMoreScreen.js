@@ -5,6 +5,7 @@ import { colors } from "../../theme/colors";
 import MobileHeader from "../../components/MobileHeader";
 
 const items = [
+  ["Tofado Intelligence", "sparkles-outline", "CommerceIntelligence"],
   ["Retailers & requests", "people-outline", "RetailerTools"],
   ["Deliveries", "car-outline", "Deliveries"],
   ["Invoices", "receipt-outline", "WholesalerInvoices"],

@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { colors } from "../../theme/colors";
 
 const items = [
+  ["Tofado Intelligence", "sparkles-outline", "CommerceIntelligence"],
   ["Invoices & balances", "receipt-outline", "RetailerInvoices"],
   ["Business profile", "person-outline", "Profile"],
 ];

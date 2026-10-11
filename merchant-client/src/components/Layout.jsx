@@ -17,6 +17,7 @@ import {
   UserPlus,
   Clock3,
   Wallet,
+  Sparkles,
   X,
 } from "lucide-react";
 
@@ -70,6 +71,12 @@ const menus = {
       path: "/retailer/invoices",
       icon: FileText,
       color: "pink",
+    },
+    {
+      label: "Intelligence",
+      path: "/retailer/intelligence",
+      icon: Sparkles,
+      color: "purple",
     },
     {
       label: "Shop profile",
@@ -134,6 +141,12 @@ const menus = {
       path: "/wholesaler/payments",
       icon: Wallet,
       color: "green",
+    },
+    {
+      label: "Intelligence",
+      path: "/wholesaler/intelligence",
+      icon: Sparkles,
+      color: "purple",
     },
     {
       label: "Business profile",

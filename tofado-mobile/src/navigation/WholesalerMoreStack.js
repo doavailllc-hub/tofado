@@ -7,6 +7,7 @@ import WholesalerPaymentsScreen from "../screens/wholesaler/WholesalerPaymentsSc
 import WholesalerPaymentDetailsScreen from "../screens/wholesaler/WholesalerPaymentDetailsScreen";
 import WholesalerInvoiceDetailsScreen from "../screens/wholesaler/WholesalerInvoiceDetailsScreen";
 import ProfileScreen from "../screens/common/ProfileScreen";
+import CommerceIntelligenceScreen from "../screens/common/CommerceIntelligenceScreen";
 const Stack = createNativeStackNavigator();
 export default function WholesalerMoreStack() {
   return <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -18,5 +19,6 @@ export default function WholesalerMoreStack() {
     <Stack.Screen name="WholesalerPayments" component={WholesalerPaymentsScreen} />
     <Stack.Screen name="WholesalerPaymentDetails" component={WholesalerPaymentDetailsScreen} />
     <Stack.Screen name="Profile" component={ProfileScreen} />
+    <Stack.Screen name="CommerceIntelligence" component={CommerceIntelligenceScreen} />
   </Stack.Navigator>;
 }

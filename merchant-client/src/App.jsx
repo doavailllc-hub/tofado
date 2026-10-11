@@ -36,6 +36,7 @@ const RetailerWholesalers = lazy(() => import('./pages/RetailerWholesalers'));
 const RetailerConnectedWholesalers = lazy(() => import('./pages/RetailerConnectedWholesalers'));
 const RetailerWholesalerRequests = lazy(() => import('./pages/RetailerWholesalerRequests'));
 const WholesalerRetailerRequests = lazy(() => import('./pages/WholesalerRetailerRequests'));
+const CommerceIntelligence = lazy(() => import('./pages/CommerceIntelligence'));
 export default function App() {
   return (
     <Suspense fallback={<main role="status" style={{ padding: 32 }}>Loading...</main>}>
@@ -99,6 +100,7 @@ export default function App() {
           path="/retailer/profile"
           element={<Profile />}
         />
+        <Route path="/retailer/intelligence" element={<CommerceIntelligence />} />
       </Route>
 
       <Route
@@ -201,6 +203,7 @@ export default function App() {
           path="/wholesaler/profile"
           element={<Profile />}
         />
+        <Route path="/wholesaler/intelligence" element={<CommerceIntelligence />} />
       </Route>
 
       <Route
