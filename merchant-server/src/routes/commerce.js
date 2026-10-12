@@ -3,6 +3,7 @@ import { pool } from '../db.js';
 import { auth, allow } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/http.js';
 import { creditPassport, expiryAction, groupBuyProgress, gstAnalytics, parseConversationalOrder, rankQuotes, reconcileUpi, reorderRecommendation, supplierTrust } from '../utils/commerce-intelligence.js';
+import { recordNumber } from '../utils/orders.js';
 
 const router = express.Router();
 const query = async (sql, params = []) => (await pool.query(sql, params))[0];
@@ -68,7 +69,20 @@ router.get('/quotes', asyncHandler(async (req, res) => {
   const params = req.user.role === 'retailer' ? [req.user.id] : [];
   const requests = await query(`SELECT qr.*,u.business_name retailer_name FROM quote_requests qr JOIN users u ON u.id=qr.retailer_id WHERE ${where} ORDER BY qr.id DESC`, params);
   for (const request of requests) {
-    const offers = await query(`SELECT qo.*,u.business_name wholesaler_name,50 trust_score FROM quote_offers qo JOIN users u ON u.id=qo.wholesaler_id WHERE qo.quote_request_id=?`, [request.id]);
+    if (req.user.role === 'wholesaler' && request.is_private) {
+      request.retailer_name = `Private buyer ${String(request.id).padStart(4, '0')}`;
+      delete request.retailer_id;
+      delete request.delivery_address;
+    }
+    const offers = await query(`SELECT qo.*,u.business_name wholesaler_name,
+      LEAST(100,50 + COALESCE(stats.fulfilled,0) * 2 - COALESCE(stats.cancelled,0) * 4) trust_score
+      FROM quote_offers qo JOIN users u ON u.id=qo.wholesaler_id
+      LEFT JOIN (SELECT wholesaler_id,SUM(status='delivered') fulfilled,SUM(status='cancelled') cancelled FROM purchase_orders GROUP BY wholesaler_id) stats ON stats.wholesaler_id=qo.wholesaler_id
+      WHERE qo.quote_request_id=?`, [request.id]);
+    if (req.user.role === 'wholesaler') {
+      request.offers = rankQuotes(offers.filter(offer => Number(offer.wholesaler_id) === Number(req.user.id)).map(offer => ({ ...offer, quantity: request.quantity })));
+      continue;
+    }
     request.offers = rankQuotes(offers.map(offer => ({ ...offer, quantity: request.quantity })));
   }
   res.json({ requests });
@@ -77,15 +91,46 @@ router.get('/quotes', asyncHandler(async (req, res) => {
 router.post('/quotes', allow('retailer'), asyncHandler(async (req, res) => {
   const product = String(req.body?.product_name || '').trim().slice(0, 180);
   if (!product) return res.status(400).json({ message: 'Product name is required.' });
-  const result = await query('INSERT INTO quote_requests(retailer_id,product_name,quantity,unit,delivery_pincode,required_date) VALUES(?,?,?,?,?,?)', [req.user.id, product, positive(req.body.quantity, 'Quantity'), String(req.body.unit||'unit').slice(0,30), String(req.body.delivery_pincode||'').trim() || null, req.body.required_date || null]);
+  const result = await query('INSERT INTO quote_requests(retailer_id,product_name,quantity,unit,delivery_pincode,delivery_address,required_date,is_private) VALUES(?,?,?,?,?,?,?,?)', [req.user.id, product, positive(req.body.quantity, 'Quantity'), String(req.body.unit||'unit').slice(0,30), String(req.body.delivery_pincode||'').trim() || null, String(req.body.delivery_address||'').trim().slice(0,500)||null, req.body.required_date || null, req.body.is_private === false ? 0 : 1]);
   res.status(201).json({ id: result.insertId, message: 'Quote request opened.' });
 }));
 
 router.post('/quotes/:id/offers', allow('wholesaler'), asyncHandler(async (req, res) => {
   const requestId = positive(req.params.id, 'Quote request');
-  await query(`INSERT INTO quote_offers(quote_request_id,wholesaler_id,unit_price,gst_rate,delivery_fee,delivery_days,credit_days,notes) VALUES(?,?,?,?,?,?,?,?)
-    ON DUPLICATE KEY UPDATE unit_price=VALUES(unit_price),gst_rate=VALUES(gst_rate),delivery_fee=VALUES(delivery_fee),delivery_days=VALUES(delivery_days),credit_days=VALUES(credit_days),notes=VALUES(notes)`, [requestId, req.user.id, positive(req.body.unit_price,'Unit price'), Math.max(0,Number(req.body.gst_rate)||0), Math.max(0,Number(req.body.delivery_fee)||0), Math.max(0,Number(req.body.delivery_days)||0), Math.max(0,Number(req.body.credit_days)||0), String(req.body.notes||'').slice(0,500)||null]);
+  const [request] = await query("SELECT id FROM quote_requests WHERE id=? AND status='open'", [requestId]);
+  if (!request) return res.status(404).json({ message: 'Open deal room not found.' });
+  const stockProof = String(req.body.stock_proof_url||'').trim().slice(0,1000);
+  if (stockProof && !/^https:\/\//i.test(stockProof)) return res.status(400).json({ message: 'Stock proof URL must use HTTPS.' });
+  await query(`INSERT INTO quote_offers(quote_request_id,wholesaler_id,unit_price,discount_percent,free_units,gst_rate,delivery_fee,delivery_days,credit_days,notes,scheme_description,return_policy,available_quantity,batch_no,expiry_date,stock_proof_url) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    ON DUPLICATE KEY UPDATE unit_price=VALUES(unit_price),discount_percent=VALUES(discount_percent),free_units=VALUES(free_units),gst_rate=VALUES(gst_rate),delivery_fee=VALUES(delivery_fee),delivery_days=VALUES(delivery_days),credit_days=VALUES(credit_days),notes=VALUES(notes),scheme_description=VALUES(scheme_description),return_policy=VALUES(return_policy),available_quantity=VALUES(available_quantity),batch_no=VALUES(batch_no),expiry_date=VALUES(expiry_date),stock_proof_url=VALUES(stock_proof_url)`, [requestId, req.user.id, positive(req.body.unit_price,'Unit price'), Math.min(100,Math.max(0,Number(req.body.discount_percent)||0)), Math.max(0,Number(req.body.free_units)||0), Math.max(0,Number(req.body.gst_rate)||0), Math.max(0,Number(req.body.delivery_fee)||0), Math.max(0,Number(req.body.delivery_days)||0), Math.max(0,Number(req.body.credit_days)||0), String(req.body.notes||'').slice(0,500)||null, String(req.body.scheme_description||'').slice(0,300)||null, String(req.body.return_policy||'').slice(0,300)||null, req.body.available_quantity == null ? null : Math.max(0,Number(req.body.available_quantity)||0), String(req.body.batch_no||'').trim().slice(0,80)||null, req.body.expiry_date||null, stockProof||null]);
   res.status(201).json({ message: 'Quote offer submitted.' });
+}));
+
+router.post('/quotes/:id/award', allow('retailer'), asyncHandler(async (req, res) => {
+  const requestId = positive(req.params.id, 'Quote request');
+  const offerId = positive(req.body.offer_id, 'Offer');
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const [[request]] = await connection.query("SELECT * FROM quote_requests WHERE id=? AND retailer_id=? AND status='open' FOR UPDATE", [requestId, req.user.id]);
+    if (!request) throw Object.assign(new Error('Open deal room not found.'), { status: 404 });
+    const [[offer]] = await connection.query('SELECT * FROM quote_offers WHERE id=? AND quote_request_id=? FOR UPDATE', [offerId, requestId]);
+    if (!offer) throw Object.assign(new Error('Quote offer not found.'), { status: 404 });
+    if (offer.available_quantity != null && Number(offer.available_quantity) < Number(request.quantity)) throw Object.assign(new Error('The supplier no longer has enough declared stock.'), { status: 409 });
+    const [ranked] = rankQuotes([{ ...offer, quantity: request.quantity, trust_score: 50 }]);
+    const orderNo = recordNumber('PO');
+    const notes = [`Created from private deal room #${request.id}.`, offer.scheme_description, offer.return_policy].filter(Boolean).join(' ');
+    const [orderResult] = await connection.query('INSERT INTO purchase_orders(order_no,retailer_id,wholesaler_id,delivery_address,required_date,notes,status,total_amount) VALUES(?,?,?,?,?,?,?,?)', [orderNo, req.user.id, offer.wholesaler_id, request.delivery_address, request.required_date, notes||null, 'pending', ranked.landed_cost]);
+    await connection.query('INSERT INTO purchase_order_items(order_id,product_name,quantity,unit,unit_price,notes) VALUES(?,?,?,?,?,?)', [orderResult.insertId, request.product_name, request.quantity, request.unit, ranked.effective_unit_cost, `Quote ${offer.id}; GST ${offer.gst_rate}%; delivery INR ${offer.delivery_fee}`]);
+    await connection.query("UPDATE quote_requests SET status='awarded',awarded_offer_id=? WHERE id=?", [offer.id, request.id]);
+    await connection.commit();
+    res.status(201).json({ id: orderResult.insertId, order_no: orderNo, total_amount: ranked.landed_cost, message: 'Winning quote accepted and purchase order created.' });
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 }));
 
 router.get('/reconciliation', allow('wholesaler'), asyncHandler(async (req,res)=>{

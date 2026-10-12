@@ -9,6 +9,14 @@ test('quote comparison ranks landed value with trust and credit', () => {
   const ranked = rankQuotes([{ id: 1, unit_price: 100, quantity: 10, gst_rate: 18, delivery_fee: 50, trust_score: 60 }, { id: 2, unit_price: 98, quantity: 10, gst_rate: 18, delivery_fee: 0, trust_score: 90, credit_days: 15 }]);
   assert.equal(ranked[0].id, 2); assert.equal(ranked[0].recommended, true); assert.equal(ranked[0].landed_cost, 1156.4);
 });
+test('deal-room comparison normalizes discounts, free units and shelf life', () => {
+  const [offer] = rankQuotes([{ id: 3, unit_price: 100, quantity: 10, free_units: 2, discount_percent: 10, gst_rate: 18, delivery_fee: 20, trust_score: 80, expiry_date: '2099-01-01' }]);
+  assert.equal(offer.list_subtotal, 800);
+  assert.equal(offer.discount_amount, 80);
+  assert.equal(offer.landed_cost, 869.6);
+  assert.equal(offer.effective_unit_cost, 86.96);
+  assert.ok(offer.shelf_life_days > 90);
+});
 test('UPI reconciliation uses amount and invoice reference without auto-approving uncertainty', () => {
   const result = reconcileUpi({ amount: 500, reference_no: 'upi INV-7' }, [{ id: 7, invoice_no: 'INV-7', total_amount: 700, paid_amount: 200 }]);
   assert.equal(result.match.invoice_id, 7); assert.equal(result.match.confidence, 100); assert.equal(result.needs_review, false);

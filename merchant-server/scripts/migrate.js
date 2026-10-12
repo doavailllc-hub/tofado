@@ -9,6 +9,7 @@ import { up as commerceIntelligenceUp } from '../migrations/006-commerce-intelli
 import { up as enquiryQuotesUp } from '../migrations/007-enquiry-quotes.js';
 import { up as wholesalerSubscriptionsUp } from '../migrations/008-wholesaler-subscriptions.js';
 import { up as standardSubscriptionPriceUp } from '../migrations/009-standard-subscription-price.js';
+import { up as privateDealRoomsUp } from '../migrations/010-private-deal-rooms.js';
 
 if (process.argv.includes('--help')) {
   console.log('Runs ordered forward-only schema migrations using MIGRATION_DB_* variables. It does not rewrite financial balances. Test on staging and record a restore point first.');
@@ -35,6 +36,7 @@ try {
     ['007-enquiry-quotes', enquiryQuotesUp],
     ['008-wholesaler-subscriptions', wholesalerSubscriptionsUp],
     ['009-standard-subscription-price', standardSubscriptionPriceUp],
+    ['010-private-deal-rooms', privateDealRoomsUp],
   ];
   for (const [version, migrate] of migrations) {
     const [[existing]] = await connection.query('SELECT version FROM schema_migrations WHERE version = ?', [version]);

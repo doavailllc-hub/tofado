@@ -19,13 +19,22 @@ export function reorderRecommendation({ stock = 0, average_daily_sales = 0, lead
 
 export function rankQuotes(quotes = []) {
   return quotes.map(quote => {
-    const subtotal = finite(quote.unit_price) * finite(quote.quantity, 1);
+    const quantity = Math.max(1, finite(quote.quantity, 1));
+    const paidQuantity = Math.max(1, quantity - Math.max(0, finite(quote.free_units)));
+    const listSubtotal = finite(quote.unit_price) * paidQuantity;
+    const discountAmount = listSubtotal * clamp(finite(quote.discount_percent), 0, 100) / 100;
+    const subtotal = Math.max(0, listSubtotal - discountAmount);
     const gst = subtotal * finite(quote.gst_rate) / 100;
+    const financingCost = subtotal * .12 * Math.max(0, finite(quote.credit_days)) / 365;
     const landed = subtotal + gst + finite(quote.delivery_fee);
+    const comparisonValue = Math.max(0.01, landed - financingCost);
+    const effectiveUnitCost = landed / quantity;
     const reliability = clamp(finite(quote.trust_score, 50), 0, 100);
     const creditBonus = Math.min(10, Math.max(0, finite(quote.credit_days)) / 3);
-    const score = landed > 0 ? (100000 / landed) + reliability + creditBonus - Math.max(0, finite(quote.delivery_days)) : reliability;
-    return { ...quote, subtotal: round(subtotal), gst_amount: round(gst), landed_cost: round(landed), comparison_score: round(score) };
+    const freshness = quote.expiry_date ? Math.max(0, Math.ceil((new Date(quote.expiry_date) - new Date()) / 86400000)) : null;
+    const freshnessPenalty = freshness !== null && freshness < 90 ? (90 - Math.max(0, freshness)) / 3 : 0;
+    const score = landed > 0 ? (100000 / comparisonValue) + reliability + creditBonus - Math.max(0, finite(quote.delivery_days)) - freshnessPenalty : reliability;
+    return { ...quote, list_subtotal: round(listSubtotal), discount_amount: round(discountAmount), subtotal: round(subtotal), gst_amount: round(gst), financing_value: round(financingCost), comparison_value: round(comparisonValue), landed_cost: round(landed), effective_unit_cost: round(effectiveUnitCost), shelf_life_days: freshness, comparison_score: round(score) };
   }).sort((a, b) => b.comparison_score - a.comparison_score).map((quote, index) => ({ ...quote, rank: index + 1, recommended: index === 0 }));
 }
 

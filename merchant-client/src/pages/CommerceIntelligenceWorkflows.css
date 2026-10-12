@@ -1,0 +1,31 @@
+.ci-alert { padding: 13px 16px; border-radius: 12px; font-weight: 700; }
+.ci-alert.error { color: #b91c1c; background: #fef2f2; }
+.ci-alert.success { color: #047857; background: #ecfdf5; }
+.ci-workspace { padding: 22px; border: 1px solid #dbe3ef; border-radius: 22px; background: #fff; }
+.ci-workspace-head { display: flex; justify-content: space-between; gap: 18px; margin-bottom: 18px; }
+.ci-workspace-head span { display: flex; align-items: center; gap: 7px; color: #4338ca; font-size: 10px; font-weight: 900; letter-spacing: .9px; }
+.ci-workspace-head h2 { margin: 7px 0 0; font-size: 20px; }
+.ci-form { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; margin-bottom: 18px; padding: 16px; border-radius: 16px; background: #f8fafc; }
+.ci-form label { display: grid; gap: 6px; color: #475569; font-size: 11px; font-weight: 800; }
+.ci-form input { box-sizing: border-box; width: 100%; min-height: 42px; padding: 0 11px; border: 1px solid #cbd5e1; border-radius: 10px; background: #fff; font: inherit; }
+.ci-form .ci-wide { display: flex; grid-column: 1/-1; align-items: center; }
+.ci-form .ci-wide input { width: 17px; min-height: 17px; }
+.ci-form>button,.ci-offer>button,.ci-group-grid button { min-height: 42px; padding: 0 15px; border: 0; border-radius: 10px; color: #fff; background: #4338ca; font-weight: 800; cursor: pointer; }
+.ci-deals { display: grid; gap: 12px; }
+.ci-deals>article { overflow: hidden; border: 1px solid #e2e8f0; border-radius: 16px; }
+.ci-deals>article>button { display: grid; width: 100%; gap: 5px; padding: 15px; border: 0; text-align: left; background: #f8fafc; cursor: pointer; }
+.ci-deals>article>button span,.ci-deals>article>button small { color: #64748b; font-size: 10px; }
+.ci-deals>article>button strong { font-size: 16px; }
+.ci-offer { display: grid; grid-template-columns: 1.2fr 1fr 1.2fr auto; align-items: center; gap: 14px; padding: 14px; border-top: 1px solid #e2e8f0; }
+.ci-offer>div { display: grid; gap: 4px; }
+.ci-offer span,.ci-offer small { color: #64748b; font-size: 10px; }
+.ci-group-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; }
+.ci-group-grid article { padding: 17px; border: 1px solid #e2e8f0; border-radius: 16px; }
+.ci-group-grid article>span { color: #64748b; font-size: 10px; }
+.ci-group-grid h3 { margin: 7px 0; }
+.ci-group-grid strong small { color: #94a3b8; text-decoration: line-through; }
+.ci-group-grid article>div { height: 7px; margin: 13px 0 5px; overflow: hidden; border-radius: 99px; background: #e2e8f0; }
+.ci-group-grid article>div i { display: block; height: 100%; background: #22c55e; }
+.ci-group-grid p { color: #64748b; font-size: 11px; }
+@media(max-width:980px) { .ci-form { grid-template-columns: repeat(2,minmax(0,1fr)); } .ci-offer { grid-template-columns: 1fr 1fr; } .ci-group-grid { grid-template-columns: 1fr 1fr; } }
+@media(max-width:650px) { .ci-form,.ci-offer,.ci-group-grid { grid-template-columns: 1fr; } .ci-workspace { padding: 15px; } }
